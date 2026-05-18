@@ -367,9 +367,3 @@ Use it only with logs, datasets, and systems that you are authorized to analyze.
 ## License
 
 No license has been selected yet. Until a license is added, standard copyright restrictions apply.
-
-Suggested future license options include:
-
-- MIT License for a permissive open-source project
-- Apache-2.0 for a permissive license with explicit patent language
-- GPL-3.0 if derivative works should remain open source
