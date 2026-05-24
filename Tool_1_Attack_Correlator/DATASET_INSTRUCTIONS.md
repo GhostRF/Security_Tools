@@ -176,28 +176,9 @@ These files are generated locally and should not be committed unless a user inte
 
 The ATT&CK mappings are rule-based. A match means the event resembles behavior associated with a technique. It does not prove that an intrusion occurred.
 
-Recommended wording:
 
 ~~~text
 The tool provides analyst triage support by correlating events and mapping suspicious patterns to ATT&CK techniques. Results should be reviewed by a human analyst before operational conclusions are made.
-~~~
-
-Avoid claiming:
-
-~~~text
-The tool proves an attack occurred.
-~~~
-
-Avoid claiming:
-
-~~~text
-All suspicious events are malicious.
-~~~
-
-Avoid claiming:
-
-~~~text
-Synthetic sample data represents a real incident.
 ~~~
 
 ## Reproducibility Notes
