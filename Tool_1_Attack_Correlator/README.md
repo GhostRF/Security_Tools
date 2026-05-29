@@ -86,8 +86,11 @@ Message
 Clone the repository:
 
 ~~~bash
-git clone git@github.com:GhostRF/Security_Tools.git
+git clone https://github.com/GhostRF/Security_Tools.git
 cd Security_Tools/Tool_1_Attack_Correlator
+
+# Optional SSH clone method for users who already have GitHub SSH configured:
+git clone git@github.com:GhostRF/Security_Tools.git
 ~~~
 
 Create and activate a Python virtual environment:
