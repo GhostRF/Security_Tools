@@ -122,7 +122,7 @@ DETECTION_RULES = [
         "regex_fields": {"command_line": r"(?i)(lsass|procdump|comsvcs\.dll|sekurlsa|mimikatz|nanodump|taskmgr.*dump)"},
     },
     {
-        "name": "Mordor PowerShell NinjaCopy or NTDS activity",
+        "name": "Message-based PowerShell NinjaCopy or NTDS activity",
         "technique_id": "T1059.001",
         "technique": "Command and Scripting Interpreter: PowerShell",
         "tactic": "Execution",
@@ -133,7 +133,7 @@ DETECTION_RULES = [
         },
     },
     {
-        "name": "Mordor NTDS credential access indicator",
+        "name": "Message-based NTDS credential access indicator",
         "technique_id": "T1003.003",
         "technique": "OS Credential Dumping: NTDS",
         "tactic": "Credential Access",
@@ -144,7 +144,7 @@ DETECTION_RULES = [
         },
     },
     {
-        "name": "Mordor LSASS access to Security Account Manager objects",
+        "name": "Message-based LSASS access to Security Account Manager objects",
         "technique_id": "T1003",
         "technique": "OS Credential Dumping",
         "tactic": "Credential Access",
@@ -216,6 +216,7 @@ DETECTION_RULES = [
         "severity": "medium",
         "event_match": {"event_category": ["dns"]},
         "regex_fields": {"query": r"(?i)([a-z0-9]{20,}\.|[a-z0-9]{12,}[0-9]{3,}[a-z0-9]*\.)"},
+        "not_regex_fields": {"query": r"(?i)(\.local\.?$|\.lan\.?$|\.home\.?$|\.arpa\.?$)"},
     },
     {
         "name": "Data staging archive creation",
@@ -524,6 +525,10 @@ def event_matches_rule(event: NormalizedEvent, rule: Dict[str, Any]) -> bool:
     for field_name, pattern in rule.get("regex_fields", {}).items():
         actual = str(event_dict.get(field_name, ""))
         if not re.search(pattern, actual):
+            return False
+    for field_name, pattern in rule.get("not_regex_fields", {}).items():
+        actual = str(event_dict.get(field_name, ""))
+        if re.search(pattern, actual):
             return False
     for field_name, threshold in rule.get("numeric_min", {}).items():
         try:
