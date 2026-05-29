@@ -331,6 +331,7 @@ This update demonstrates how parser coverage directly affects detection quality.
 - Zeek-only datasets may lack host and user context.
 - Some detections require structured fields or useful message text to be present.
 - False positives and false negatives are expected.
+  - The DGA-like DNS rule is heuristic and includes exclusions for common local/service-discovery domains such as .local, .lan, .home, and .arpa to reduce expected false positives.
 
 ## Suggested Future Enhancements
 
