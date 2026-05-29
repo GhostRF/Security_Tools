@@ -21,6 +21,7 @@ import argparse
 import csv
 import json
 import math
+import ntpath
 import os
 import re
 import sys
@@ -362,7 +363,10 @@ def normalize_record(record: Dict[str, Any], source_name: str) -> NormalizedEven
     category = infer_category(record, source_name)
     ts = parse_time(first_present(record, ["UtcTime", "TimeCreated", "@timestamp", "timestamp", "ts", "TimeGenerated", "date", "datetime"]))
     image = first_present(record, ["Image", "ProcessName", "process_name", "process", "exe"])
-    process_name = os.path.basename(image).lower() if image else first_present(record, ["process_name"], "").lower()
+    if image:
+        process_name = ntpath.basename(os.path.basename(image)).lower()
+    else:
+        process_name = first_present(record, ["process_name"], "").lower()
     command_line = first_present(record, ["CommandLine", "cmdline", "command_line", "process.command_line"])
     message = first_present(record, ["Message", "message", "RenderedDescription", "EventDescription"])
     host = first_present(record, ["Computer", "ComputerName", "Hostname", "host", "hostname", "agent.hostname", "id.orig_h"], "unknown")
