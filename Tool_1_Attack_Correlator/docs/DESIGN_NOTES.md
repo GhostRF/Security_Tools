@@ -166,3 +166,23 @@ Potential future improvements include:
 - Confidence scoring for detections
 - Neo4j or graph database export
 - Interactive dashboard reporting
+
+## Smoke Test Result After Refinement
+
+After adding parallel file parsing and watch mode, the sample smoke test was rerun.
+
+Command:
+
+~~~bash
+python3 attack_correlator.py samples/sample_sysmon.jsonl samples/sample_zeek_dns.jsonl samples/sample_zeek_conn.csv --workers 2
+~~~
+
+Result:
+
+~~~text
+Loaded events: 6
+Suspicious events: 6
+Attack chains: 2
+~~~
+
+This result is expected because all six synthetic sample events intentionally represent suspicious behaviors used to validate different rule mappings.

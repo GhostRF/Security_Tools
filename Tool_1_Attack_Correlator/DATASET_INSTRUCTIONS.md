@@ -29,7 +29,7 @@ Expected behavior:
 
 ~~~text
 Loaded events: 6
-Suspicious events: 3
+Suspicious events: 6
 Attack chains: 2
 ~~~
 

@@ -26,6 +26,7 @@ import os
 import re
 import sys
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -492,30 +493,56 @@ def read_evtx_file(path: Path) -> Iterable[Dict[str, Any]]:
     return records
 
 
-def load_events(paths: List[str]) -> List[NormalizedEvent]:
-    events: List[NormalizedEvent] = []
+def discover_input_files(paths: List[str]) -> List[Path]:
+    supported = {".json", ".jsonl", ".ndjson", ".log", ".csv", ".evtx"}
+    files: List[Path] = []
     for item in paths:
         path = Path(item)
-        files = list(path.rglob("*")) if path.is_dir() else [path]
+        candidates = list(path.rglob("*")) if path.is_dir() else [path]
+        for f in candidates:
+            if f.is_file() and f.suffix.lower() in supported:
+                files.append(f)
+    return files
+
+
+def load_events_from_file(file_path: str) -> List[NormalizedEvent]:
+    f = Path(file_path)
+    suffix = f.suffix.lower()
+
+    if suffix in [".json", ".jsonl", ".ndjson"]:
+        raw_records = read_json_file(f)
+    elif suffix == ".log":
+        raw_records = read_log_file(f)
+    elif suffix == ".csv":
+        raw_records = read_csv_file(f)
+    elif suffix == ".evtx":
+        raw_records = read_evtx_file(f)
+    else:
+        return []
+
+    return [normalize_record(rec, f.name) for rec in raw_records]
+
+
+def load_events(paths: List[str], workers: int = 1) -> List[NormalizedEvent]:
+    files = discover_input_files(paths)
+    events: List[NormalizedEvent] = []
+
+    if workers <= 1 or len(files) <= 1:
         for f in files:
-            if not f.is_file():
-                continue
-            suffix = f.suffix.lower()
             try:
-                if suffix in [".json", ".jsonl", ".ndjson"]:
-                    raw_records = read_json_file(f)
-                elif suffix == ".log":
-                    raw_records = read_log_file(f)
-                elif suffix == ".csv":
-                    raw_records = read_csv_file(f)
-                elif suffix == ".evtx":
-                    raw_records = read_evtx_file(f)
-                else:
-                    continue
-                for rec in raw_records:
-                    events.append(normalize_record(rec, f.name))
+                events.extend(load_events_from_file(str(f)))
             except Exception as exc:
                 print(f"[WARN] Failed to parse {f}: {exc}", file=sys.stderr)
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            future_map = {executor.submit(load_events_from_file, str(f)): f for f in files}
+            for future in as_completed(future_map):
+                f = future_map[future]
+                try:
+                    events.extend(future.result())
+                except Exception as exc:
+                    print(f"[WARN] Failed to parse {f}: {exc}", file=sys.stderr)
+
     return sorted(events, key=lambda e: e.timestamp)
 
 
@@ -709,18 +736,16 @@ def write_html_report(chains: List[Dict[str, Any]], out_path: Path) -> None:
     out_path.write_text("\n".join(parts))
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="ATT&CK-based multi-source detection correlator")
-    parser.add_argument("inputs", nargs="+", help="Input files or directories containing JSON, JSONL, CSV, LOG, or EVTX files")
-    parser.add_argument("-o", "--output", default="attack_correlator_output", help="Output directory")
-    parser.add_argument("-w", "--window", type=int, default=60, help="Correlation window in minutes")
-    parser.add_argument("--min-risk", type=int, default=0, help="Only include chains with risk score >= this value")
-    args = parser.parse_args()
+def input_fingerprint(paths: List[str]) -> Tuple[Tuple[str, float, int], ...]:
+    files = discover_input_files(paths)
+    return tuple(sorted((str(f), f.stat().st_mtime, f.stat().st_size) for f in files))
 
+
+def run_analysis(args: argparse.Namespace) -> None:
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    events = load_events(args.inputs)
+    events = load_events(args.inputs, workers=args.workers)
     apply_detections(events)
     chains = correlate(events, args.window)
     chains = [c for c in chains if c["risk_score"] >= args.min_risk]
@@ -731,8 +756,9 @@ def main() -> int:
     write_graph(chains, out_dir / "attack_graph.dot")
     write_html_report(chains, out_dir / "report.html")
     (out_dir / "validation_notes.txt").write_text(
-        "This tool uses transparent heuristic detection rules mapped to MITRE ATT&CK technique IDs.\n"
+        "This tool uses transparent rule-based detection logic mapped to MITRE ATT&CK technique IDs.\n"
         "The IDs/names were checked during preparation, but the rule logic is not an official MITRE detection and is not operationally validated.\n"
+        "Risk scoring is manually weighted and should be treated as analyst triage support, not a validated probability of compromise.\n"
         "Use public datasets or lab telemetry to validate parsing, false positives, and correlation behavior before making claims.\n"
     )
 
@@ -744,6 +770,36 @@ def main() -> int:
         print("\nTop chains:")
         for c in chains[:5]:
             print(f"  Chain {c['chain_id']} | Risk {c['risk_score']} | Host {c['host']} | User {c['user']} | Events {c['event_count']}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="ATT&CK-based multi-source detection correlator")
+    parser.add_argument("inputs", nargs="+", help="Input files or directories containing JSON, JSONL, CSV, LOG, or EVTX files")
+    parser.add_argument("-o", "--output", default="attack_correlator_output", help="Output directory")
+    parser.add_argument("-w", "--window", type=int, default=60, help="Correlation window in minutes")
+    parser.add_argument("--min-risk", type=int, default=0, help="Only include chains with risk score >= this value")
+    parser.add_argument("--workers", type=int, default=1, help="Number of worker processes for parallel file parsing")
+    parser.add_argument("--watch", action="store_true", help="Continuously rerun analysis when input files change")
+    parser.add_argument("--watch-interval", type=int, default=30, help="Polling interval in seconds for watch mode")
+    args = parser.parse_args()
+
+    if args.watch:
+        import time
+        print(f"Watch mode enabled. Polling every {args.watch_interval} seconds. Press Ctrl+C to stop.")
+        last_fp = None
+        try:
+            while True:
+                current_fp = input_fingerprint(args.inputs)
+                if current_fp != last_fp:
+                    print("\nChange detected. Running analysis...")
+                    run_analysis(args)
+                    last_fp = current_fp
+                time.sleep(args.watch_interval)
+        except KeyboardInterrupt:
+            print("\nWatch mode stopped.")
+            return 0
+
+    run_analysis(args)
     return 0
 
 
