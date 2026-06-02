@@ -99,7 +99,7 @@ Low findings: 3
 ```
 These tests demonstrate that the tool can distinguish between a baseline-aligned sample configuration and an intentionally insecure sample configuration.
 
-##Known Limitations
+## Known Limitations
 
 The tool does not directly collect settings from a live host. It depends on exported configuration artifacts provided by the user.
 
@@ -109,7 +109,7 @@ The current checks are intentionally simple and transparent. They should be expa
 
 The compliance score is manually weighted and should be treated as a triage aid, not a formal measure of organizational risk.
 
-##Future Work
+## Future Work
 
 Future improvements could include:
 
