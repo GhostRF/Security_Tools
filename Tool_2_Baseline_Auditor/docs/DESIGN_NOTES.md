@@ -85,9 +85,9 @@ Critical findings: 0
 High findings: 0
 Medium findings: 0
 Low findings: 0
-
+```
 Insecure sample result:
-
+```text
 Baseline checks run: 15
 Passed: 0
 Failed: 15
@@ -96,7 +96,7 @@ Critical findings: 2
 High findings: 4
 Medium findings: 6
 Low findings: 3
-
+```
 These tests demonstrate that the tool can distinguish between a baseline-aligned sample configuration and an intentionally insecure sample configuration.
 
 ##Known Limitations
