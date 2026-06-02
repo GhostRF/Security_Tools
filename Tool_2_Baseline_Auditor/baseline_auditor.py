@@ -19,7 +19,10 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
+
+
+__version__ = "1.1.0"
 
 
 SEVERITY_WEIGHTS = {
@@ -76,7 +79,7 @@ def parse_key_value_config(text: str) -> Dict[str, str]:
             key, value = line.split("=", 1)
             config[key.strip().lower()] = value.strip()
         else:
-            parts = line.split(None, 1)
+            parts = re.split(r"\s+", line, maxsplit=1)
             if len(parts) == 2:
                 config[parts[0].strip().lower()] = parts[1].strip()
 
@@ -85,6 +88,16 @@ def parse_key_value_config(text: str) -> Dict[str, str]:
 
 def get_value(config: Dict[str, str], key: str) -> Optional[str]:
     return config.get(key.lower())
+
+
+def parse_int(value: Optional[str]) -> Optional[int]:
+    if value is None:
+        return None
+
+    try:
+        return int(str(value).strip())
+    except ValueError:
+        return None
 
 
 def pass_finding(
@@ -126,6 +139,36 @@ def fail_finding(
         rationale=rationale,
         recommendation=recommendation,
     )
+
+
+def is_world_writable_mode(mode: str) -> bool:
+    """
+    Detect world-writable permissions from octal modes such as 777, 0777, 666,
+    0666, and symbolic modes such as rwxrwxrwx, -rw-rw-rw-, or drwxrwxrwx.
+    """
+    clean = str(mode).strip()
+
+    if not clean:
+        return False
+
+    # Octal mode, including examples such as 777, 0777, 666, 0666, or 1777.
+    if re.fullmatch(r"0?[0-7]{3,4}", clean):
+        return bool(int(clean[-1]) & 0o2)
+
+    # Remove common trailing ACL or extended attribute markers from ls output.
+    symbolic = clean.rstrip("+.")
+
+    # ls-style symbolic mode with file type character, such as -rw-rw-rw-.
+    if len(symbolic) >= 10 and symbolic[0] in "-dlcbps":
+        perms = symbolic[1:10]
+        return perms[7] == "w"
+
+    # Permission-only symbolic mode, such as rwxrwxrwx.
+    if len(symbolic) >= 9:
+        perms = symbolic[:9]
+        return perms[7] == "w"
+
+    return False
 
 
 def check_sshd_config(target_dir: Path) -> List[Finding]:
@@ -288,6 +331,7 @@ def check_login_defs(target_dir: Path) -> List[Finding]:
     path = target_dir / "login.defs"
     text = read_text_file(path)
     config = parse_key_value_config(text)
+
     category = "Account and Password Policy"
 
     if not text:
@@ -412,6 +456,7 @@ def check_sysctl(target_dir: Path) -> List[Finding]:
     path = target_dir / "sysctl.conf"
     text = read_text_file(path)
     config = parse_key_value_config(text)
+
     category = "Kernel and Network Hardening"
 
     if not text:
@@ -469,6 +514,7 @@ def check_sysctl(target_dir: Path) -> List[Finding]:
 
     for check_id, key, expected, title, rationale, recommendation, severity in expected_values:
         actual = get_value(config, key)
+
         if actual == expected:
             findings.append(
                 pass_finding(
@@ -499,6 +545,7 @@ def check_sysctl(target_dir: Path) -> List[Finding]:
 def check_firewall_status(target_dir: Path) -> List[Finding]:
     path = target_dir / "firewall_status.txt"
     text = read_text_file(path)
+
     category = "Firewall"
 
     if not text:
@@ -515,12 +562,14 @@ def check_firewall_status(target_dir: Path) -> List[Finding]:
         ]
 
     lower = text.lower()
+
     enabled_patterns = [
         "status: active",
         "active",
         "running",
         "enabled",
     ]
+
     disabled_patterns = [
         "inactive",
         "disabled",
@@ -528,7 +577,9 @@ def check_firewall_status(target_dir: Path) -> List[Finding]:
         "stopped",
     ]
 
-    if any(pattern in lower for pattern in enabled_patterns) and not any(pattern in lower for pattern in disabled_patterns):
+    if any(pattern in lower for pattern in enabled_patterns) and not any(
+        pattern in lower for pattern in disabled_patterns
+    ):
         return [
             pass_finding(
                 "FW-001",
@@ -555,8 +606,8 @@ def check_firewall_status(target_dir: Path) -> List[Finding]:
 
 def check_file_permissions(target_dir: Path) -> List[Finding]:
     path = target_dir / "file_permissions.csv"
+
     category = "File Permissions"
-    findings: List[Finding] = []
 
     if not path.exists():
         return [
@@ -572,20 +623,24 @@ def check_file_permissions(target_dir: Path) -> List[Finding]:
         ]
 
     rows: List[Dict[str, str]] = []
+
     with path.open(newline="", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
+
         for row in reader:
             rows.append(row)
 
     risky_rows = []
+
     for row in rows:
         mode = str(row.get("mode", "")).strip()
         file_path = str(row.get("path", "")).strip()
+
         if is_world_writable_mode(mode):
             risky_rows.append((file_path, mode))
 
     if not risky_rows:
-        findings.append(
+        return [
             pass_finding(
                 "FILE-001",
                 "No world-writable files found in inventory",
@@ -594,51 +649,32 @@ def check_file_permissions(target_dir: Path) -> List[Finding]:
                 "World-writable files can allow unauthorized modification if located in sensitive paths.",
                 "Continue reviewing file permissions for sensitive directories.",
             )
+        ]
+
+    evidence = "; ".join(f"{p} ({m})" for p, m in risky_rows[:10])
+
+    return [
+        fail_finding(
+            "FILE-001",
+            "World-writable files found in inventory",
+            "high",
+            category,
+            evidence,
+            "World-writable files can allow unauthorized modification and may support privilege escalation or persistence.",
+            "Remove world-writable permissions unless explicitly required and documented.",
         )
-    else:
-        evidence = "; ".join(f"{p} ({m})" for p, m in risky_rows[:10])
-        findings.append(
-            fail_finding(
-                "FILE-001",
-                "World-writable files found in inventory",
-                "high",
-                category,
-                evidence,
-                "World-writable files can allow unauthorized modification and may support privilege escalation or persistence.",
-                "Remove world-writable permissions unless explicitly required and documented.",
-            )
-        )
-
-    return findings
-
-
-def parse_int(value: Optional[str]) -> Optional[int]:
-    if value is None:
-        return None
-    try:
-        return int(str(value).strip())
-    except ValueError:
-        return None
-
-
-def is_world_writable_mode(mode: str) -> bool:
-    """
-    Supports octal modes such as 777, 0777, 666, 0666.
-    """
-    clean = mode.strip()
-    if not re.fullmatch(r"0?[0-7]{3,4}", clean):
-        return False
-    last_digit = int(clean[-1])
-    return bool(last_digit & 0o2)
+    ]
 
 
 def run_audit(target_dir: Path) -> List[Finding]:
     findings: List[Finding] = []
+
     findings.extend(check_sshd_config(target_dir))
     findings.extend(check_login_defs(target_dir))
     findings.extend(check_sysctl(target_dir))
     findings.extend(check_firewall_status(target_dir))
     findings.extend(check_file_permissions(target_dir))
+
     return findings
 
 
@@ -650,6 +686,7 @@ def compliance_score(findings: List[Finding]) -> int:
         return 0
 
     total_penalty = sum(SEVERITY_WEIGHTS.get(f.severity, 0) for f in failed)
+
     max_penalty = sum(
         SEVERITY_WEIGHTS.get(f.severity, 0) if f.status == "FAIL" else 10
         for f in applicable
@@ -659,6 +696,7 @@ def compliance_score(findings: List[Finding]) -> int:
         return 100
 
     score = 100 - int((total_penalty / max_penalty) * 100)
+
     return max(0, min(100, score))
 
 
@@ -672,7 +710,9 @@ def summarize(findings: List[Finding]) -> Dict[str, int]:
         "medium": sum(1 for f in findings if f.status == "FAIL" and f.severity == "medium"),
         "low": sum(1 for f in findings if f.status == "FAIL" and f.severity == "low"),
     }
+
     summary["compliance_score"] = compliance_score(findings)
+
     return summary
 
 
@@ -685,6 +725,7 @@ def write_json(findings: List[Finding], out_dir: Path) -> None:
 
 def write_csv(findings: List[Finding], out_dir: Path) -> None:
     csv_path = out_dir / "findings.csv"
+
     fieldnames = [
         "check_id",
         "title",
@@ -699,13 +740,16 @@ def write_csv(findings: List[Finding], out_dir: Path) -> None:
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
+
         for finding in findings:
             writer.writerow(asdict(finding))
 
 
 def write_summary(findings: List[Finding], out_dir: Path) -> None:
     summary = summarize(findings)
+
     lines = [
+        f"Security Baseline Compliance Auditor v{__version__}",
         f"Baseline checks run: {summary['total_checks']}",
         f"Passed: {summary['passed']}",
         f"Failed: {summary['failed']}",
@@ -723,6 +767,7 @@ def write_html(findings: List[Finding], out_dir: Path) -> None:
     summary = summarize(findings)
 
     rows = []
+
     for finding in findings:
         rows.append(
             "<tr>"
@@ -742,15 +787,38 @@ def write_html(findings: List[Finding], out_dir: Path) -> None:
   <meta charset="utf-8">
   <title>Security Baseline Compliance Report</title>
   <style>
-    body {{ font-family: Arial, sans-serif; margin: 2rem; }}
-    table {{ border-collapse: collapse; width: 100%; }}
-    th, td {{ border: 1px solid #ccc; padding: 6px; text-align: left; vertical-align: top; }}
-    th {{ background: #f2f2f2; }}
-    .score {{ font-size: 1.4rem; font-weight: bold; }}
+    body {{
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      line-height: 1.4;
+    }}
+    table {{
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.9rem;
+    }}
+    th, td {{
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: left;
+      vertical-align: top;
+    }}
+    th {{
+      background: #f2f2f2;
+    }}
+    .score {{
+      font-size: 1.4rem;
+      font-weight: bold;
+    }}
+    .meta {{
+      color: #555;
+      font-size: 0.9rem;
+    }}
   </style>
 </head>
 <body>
   <h1>Security Baseline Compliance Report</h1>
+  <p class="meta">Generated by Security Baseline Compliance Auditor v{__version__}</p>
   <p class="score">Compliance Score: {summary['compliance_score']}%</p>
   <ul>
     <li>Baseline checks run: {summary['total_checks']}</li>
@@ -776,18 +844,37 @@ def write_html(findings: List[Finding], out_dir: Path) -> None:
 </body>
 </html>
 """
+
     (out_dir / "report.html").write_text(document, encoding="utf-8")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Audit exported Linux configuration artifacts against a transparent security baseline."
+        description=f"Security Baseline Compliance Auditor v{__version__}"
     )
-    parser.add_argument("target", help="Directory containing exported configuration artifacts")
-    parser.add_argument("-o", "--output", default="baseline_auditor_output", help="Output directory")
+
+    parser.add_argument(
+        "target",
+        help="Directory containing exported configuration artifacts",
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="baseline_auditor_output",
+        help="Output directory",
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+
     args = parser.parse_args()
 
     target_dir = Path(args.target)
+
     if not target_dir.exists() or not target_dir.is_dir():
         print(f"[ERROR] Target directory does not exist or is not a directory: {target_dir}")
         return 2
@@ -803,6 +890,7 @@ def main() -> int:
     write_summary(findings, out_dir)
     write_html(findings, out_dir)
 
+    print(f"Security Baseline Compliance Auditor v{__version__}")
     print(f"Baseline checks run: {summary['total_checks']}")
     print(f"Passed: {summary['passed']}")
     print(f"Failed: {summary['failed']}")
