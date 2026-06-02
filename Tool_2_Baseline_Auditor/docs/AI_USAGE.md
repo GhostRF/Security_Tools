@@ -29,11 +29,12 @@ Baseline checks run: 15
 Passed: 15
 Failed: 0
 Compliance score: 100%
+```
 
 The author also reviewed the generated HTML reports to confirm that the findings, evidence, and recommendations appeared as expected.
 
 
-##Validation Performed Included
+## Validation Performed Included
 
 Python syntax compilation using python3 -m py_compile
 Running the tool against the secure sample dataset
