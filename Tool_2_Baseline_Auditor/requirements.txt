@@ -1,3 +1,2 @@
-The tool uses Python 3 and the Python standard library only.
-
-No third-party packages are required.
+# The tool uses Python 3 and the Python standard library only.
+# No third-party packages are required.
