@@ -61,3 +61,102 @@ Tool_2_Baseline_Auditor/
 └── docs/
     ├── DESIGN_NOTES.md
     └── AI_USAGE.md
+```
+
+## Requirements
+
+The tool uses Python 3 and the Python standard library only.
+
+No third-party packages are required.
+
+## Setup
+
+Clone the repository and move into the tool directory:
+
+```bash
+git clone https://github.com/GhostRF/Security_Tools.git
+cd Security_Tools/Tool_2_Baseline_Auditor
+```
+
+Optional syntax check:
+
+```bash
+python3 -m py_compile baseline_auditor.py
+```
+
+## Usage
+
+Run the tool against the secure sample:
+
+```bash
+python3 baseline_auditor.py samples/secure_linux -o output_secure
+```
+
+Run the tool against the insecure sample:
+
+```bash
+python3 baseline_auditor.py samples/insecure_linux -o output_insecure
+```
+
+Check the tool version:
+
+```bash
+python3 baseline_auditor.py --version
+```
+
+## Expected Results
+
+Secure sample expected result:
+
+```text
+Security Baseline Compliance Auditor v1.1.0
+Baseline checks run: 15
+Passed: 15
+Failed: 0
+Compliance score: 100%
+Critical findings: 0
+High findings: 0
+Medium findings: 0
+Low findings: 0
+```
+
+Insecure sample expected result:
+
+```text
+Security Baseline Compliance Auditor v1.1.0
+Baseline checks run: 15
+Passed: 0
+Failed: 15
+Compliance score: 0%
+Critical findings: 2
+High findings: 4
+Medium findings: 6
+Low findings: 3
+```
+
+## Version 1.1.0 Update
+
+Version 1.1.0 improves file-permission analysis by expanding world-writable file detection. The tool now supports both octal permission formats, such as `0777`, `0666`, and `1777`, and symbolic permission formats, such as `rwxrwxrwx`, `-rw-rw-rw-`, and `drwxrwxrwx`.
+
+This improvement makes the file-permission check more useful for realistic exported permission inventories because Linux permissions are commonly represented in both octal and symbolic formats.
+
+## Output Files
+
+The tool writes the following files to the selected output directory:
+
+```text
+findings.json
+findings.csv
+summary.txt
+report.html
+```
+
+## Known Limitations
+
+This tool does not directly scan the live operating system. It analyzes exported configuration artifacts. This design improves safety and reproducibility, but it also means the quality of the results depends on the accuracy and completeness of the provided input files.
+
+The current version focuses on Linux-style configuration files and does not yet support Windows baselines, cloud configuration exports, container security checks, Kubernetes manifests, or direct CIS Benchmark mapping.
+
+## Safety and Ethics
+
+This tool is defensive and does not exploit systems, modify configuration files, or perform intrusive scanning. It is intended for authorized assessment of exported configuration artifacts.

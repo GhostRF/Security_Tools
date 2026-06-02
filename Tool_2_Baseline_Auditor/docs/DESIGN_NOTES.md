@@ -70,6 +70,25 @@ The compliance score is a simple weighted triage indicator. Failed checks subtra
 
 The score is intended to help prioritize review. It is not a formal compliance certification, validated risk score, or replacement for a full security assessment.
 
+## Version 1.1.0 Update
+
+Version 1.1.0 added improved world-writable file detection. The original file-permission logic supported octal modes such as `0777` and `0666`. The updated logic now also supports symbolic Linux permission strings such as `rwxrwxrwx`, `-rw-rw-rw-`, and `drwxrwxrwx`.
+
+This update improves the tool's practical usability because exported file-permission inventories may use either octal or symbolic permission formats.
+
+The update was validated with a direct function test covering octal and symbolic permissions. Tested examples included:
+
+```text
+0777         expected=True actual=True PASS
+0666         expected=True actual=True PASS
+0644         expected=False actual=False PASS
+1777         expected=True actual=True PASS
+rwxrwxrwx    expected=True actual=True PASS
+-rw-rw-rw-   expected=True actual=True PASS
+drwxrwxrwx   expected=True actual=True PASS
+-rw-r--r--   expected=False actual=False PASS
+drwxr-xr-x   expected=False actual=False PASS
+
 ## Test Results
 
 The tool was tested using two included sample datasets.
@@ -113,16 +132,15 @@ The compliance score is manually weighted and should be treated as a triage aid,
 
 Future improvements could include:
 
-YAML-based external rule definitions
-CIS Benchmark mapping
-Windows baseline checks
-Container and Kubernetes checks
-Cloud configuration checks
-Live local collection mode
-More detailed scoring options
-Better HTML styling and charts
-Automated test cases
-Additional sample datasets
-Ethical and Operational Considerations
+- YAML-based external rule definitions
+- CIS Benchmark mapping
+- Windows baseline checks
+- Container and Kubernetes checks
+- Cloud configuration checks
+- Live local collection mode
+- More detailed scoring options
+- Better HTML styling and charts
+- Automated test cases
+- Additional sample datasets
 
 This tool is defensive and non-intrusive. It should only be used to assess systems or configuration artifacts that the user is authorized to review. The tool does not make configuration changes, exploit vulnerabilities, or perform active network scanning.
