@@ -22,3 +22,7 @@ attack_correlator_output/
 *.pcap
 *.evtx
 .DS_Store
+
+# Tool 2 generated output folders
+Tool_2_Baseline_Auditor/output_*/
+Tool_2_Baseline_Auditor/baseline_auditor_output/

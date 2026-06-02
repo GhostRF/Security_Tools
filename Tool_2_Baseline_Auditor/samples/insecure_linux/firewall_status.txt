@@ -1,0 +1,2 @@
+Status: inactive
+Default: allow incoming, allow outgoing

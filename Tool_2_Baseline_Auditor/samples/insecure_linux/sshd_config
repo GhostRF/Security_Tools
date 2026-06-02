@@ -1,0 +1,6 @@
+# Insecure sample sshd_config for reproducible testing
+PermitRootLogin yes
+PasswordAuthentication yes
+PermitEmptyPasswords yes
+X11Forwarding yes
+MaxAuthTries 10

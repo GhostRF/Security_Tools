@@ -1,0 +1,5 @@
+# Secure sample login.defs for reproducible testing
+PASS_MAX_DAYS 90
+PASS_MIN_DAYS 1
+PASS_MIN_LEN 14
+PASS_WARN_AGE 14

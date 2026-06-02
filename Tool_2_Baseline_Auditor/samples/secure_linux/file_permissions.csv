@@ -1,0 +1,6 @@
+path,owner,group,mode
+/etc/passwd,root,root,0644
+/etc/shadow,root,shadow,0640
+/etc/ssh/sshd_config,root,root,0600
+/var/log/auth.log,root,adm,0640
+/usr/local/bin/maintenance.sh,root,root,0750

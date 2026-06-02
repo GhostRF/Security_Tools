@@ -1,0 +1,6 @@
+# Secure sample sshd_config for reproducible testing
+PermitRootLogin no
+PasswordAuthentication no
+PermitEmptyPasswords no
+X11Forwarding no
+MaxAuthTries 3
