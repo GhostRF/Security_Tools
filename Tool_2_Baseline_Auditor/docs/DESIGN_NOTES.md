@@ -70,14 +70,6 @@ The compliance score is a simple weighted triage indicator. Failed checks subtra
 
 The score is intended to help prioritize review. It is not a formal compliance certification, validated risk score, or replacement for a full security assessment.
 
-## Version 1.1.0 Update
-
-Version 1.1.0 added improved world-writable file detection. The original file-permission logic supported octal modes such as `0777` and `0666`. The updated logic now also supports symbolic Linux permission strings such as `rwxrwxrwx`, `-rw-rw-rw-`, and `drwxrwxrwx`.
-
-This update improves the tool's practical usability because exported file-permission inventories may use either octal or symbolic permission formats.
-
-The update was validated with a direct function test covering octal and symbolic permissions. Tested examples included:
-
 ```text
 0777         expected=True actual=True PASS
 0666         expected=True actual=True PASS
