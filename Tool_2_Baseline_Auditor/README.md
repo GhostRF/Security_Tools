@@ -10,6 +10,8 @@ Security teams often need to evaluate whether systems are configured according t
 
 This tool addresses that problem by providing a portable Python-based baseline auditor that can run against sample or exported configuration files without requiring privileged access to the local system.
 
+The tool supports both octal permission formats, such as `0777`, `0666`, and `1777`, and symbolic permission formats, such as `rwxrwxrwx`, `-rw-rw-rw-`, and `drwxrwxrwx`. This makes the file-permission check more useful for realistic exported permission inventories because Linux permissions are commonly represented in both octal and symbolic formats.
+
 ## What the Tool Checks
 
 The current version evaluates the following Linux-style configuration artifacts:
@@ -133,12 +135,6 @@ High findings: 4
 Medium findings: 6
 Low findings: 3
 ```
-
-## Version 1.1.0 Update
-
-Version 1.1.0 improves file-permission analysis by expanding world-writable file detection. The tool now supports both octal permission formats, such as `0777`, `0666`, and `1777`, and symbolic permission formats, such as `rwxrwxrwx`, `-rw-rw-rw-`, and `drwxrwxrwx`.
-
-This improvement makes the file-permission check more useful for realistic exported permission inventories because Linux permissions are commonly represented in both octal and symbolic formats.
 
 ## Output Files
 
