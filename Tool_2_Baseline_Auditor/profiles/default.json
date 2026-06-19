@@ -1,0 +1,254 @@
+{
+  "profile_id": "default",
+  "name": "Default Linux Hardening Baseline",
+  "version": "1.0",
+  "description": "Custom educational baseline for exported Linux-style configuration artifacts. This profile is not a formal CIS or NIST certification profile.",
+  "severity_weights": {
+    "critical": 25,
+    "high": 15,
+    "medium": 8,
+    "low": 3
+  },
+  "pass_weight": 10,
+  "artifacts": {
+    "sshd_config": {
+      "parser": "key_value",
+      "category": "SSH Hardening",
+      "missing": {
+        "check_id": "SSH-000",
+        "title": "sshd_config file is missing",
+        "severity": "high",
+        "rationale": "SSH configuration could not be assessed without the exported sshd_config file.",
+        "recommendation": "Export sshd_config from the target system and include it in the assessment directory."
+      },
+      "rules": [
+        {
+          "check_id": "SSH-001",
+          "key": "PermitRootLogin",
+          "operator": "in",
+          "expected": [
+            "no",
+            "prohibit-password",
+            "forced-commands-only"
+          ],
+          "severity": "critical",
+          "title_pass": "SSH root login is restricted",
+          "title_fail": "SSH root login is not restricted",
+          "rationale": "Restricting direct root login reduces the risk of direct privileged remote access.",
+          "recommendation": "Set PermitRootLogin no unless a documented operational exception exists."
+        },
+        {
+          "check_id": "SSH-002",
+          "key": "PasswordAuthentication",
+          "operator": "equals",
+          "expected": "no",
+          "severity": "high",
+          "title_pass": "SSH password authentication is disabled",
+          "title_fail": "SSH password authentication is enabled or not explicitly disabled",
+          "rationale": "Disabling password authentication reduces exposure to password guessing and credential-stuffing attacks.",
+          "recommendation": "Set PasswordAuthentication no if key-based authentication is supported by the environment."
+        },
+        {
+          "check_id": "SSH-003",
+          "key": "PermitEmptyPasswords",
+          "operator": "equals",
+          "expected": "no",
+          "severity": "critical",
+          "title_pass": "SSH empty passwords are disabled",
+          "title_fail": "SSH empty password protection is missing",
+          "rationale": "Rejecting empty passwords prevents remote login for accounts with blank passwords.",
+          "recommendation": "Set PermitEmptyPasswords no."
+        },
+        {
+          "check_id": "SSH-004",
+          "key": "X11Forwarding",
+          "operator": "equals",
+          "expected": "no",
+          "severity": "medium",
+          "title_pass": "SSH X11 forwarding is disabled",
+          "title_fail": "SSH X11 forwarding is enabled or not explicitly disabled",
+          "rationale": "X11 forwarding is often unnecessary on hardened servers and may increase attack surface.",
+          "recommendation": "Set X11Forwarding no unless required."
+        },
+        {
+          "check_id": "SSH-005",
+          "key": "MaxAuthTries",
+          "operator": "int_lte",
+          "maximum": 4,
+          "severity": "medium",
+          "title_pass": "SSH authentication retries are limited",
+          "title_fail": "SSH authentication retries are not tightly limited",
+          "rationale": "Limiting authentication attempts reduces brute-force opportunity per connection.",
+          "recommendation": "Set MaxAuthTries 4 or lower."
+        }
+      ]
+    },
+    "login.defs": {
+      "parser": "key_value",
+      "category": "Account and Password Policy",
+      "missing": {
+        "check_id": "AUTH-000",
+        "title": "login.defs file is missing",
+        "severity": "medium",
+        "rationale": "Password aging policy could not be assessed without login.defs.",
+        "recommendation": "Export login.defs from the target system and include it in the assessment directory."
+      },
+      "rules": [
+        {
+          "check_id": "AUTH-001",
+          "key": "PASS_MAX_DAYS",
+          "operator": "int_between",
+          "minimum": 1,
+          "maximum": 90,
+          "severity": "medium",
+          "title_pass": "Password maximum age is configured",
+          "title_fail": "Password maximum age is weak or missing",
+          "rationale": "Password aging can reduce the long-term exposure of compromised credentials.",
+          "recommendation": "Set PASS_MAX_DAYS to a value aligned with organizational policy, such as 90 days where appropriate."
+        },
+        {
+          "check_id": "AUTH-002",
+          "key": "PASS_MIN_DAYS",
+          "operator": "int_gte",
+          "minimum": 1,
+          "severity": "low",
+          "title_pass": "Password minimum age is configured",
+          "title_fail": "Password minimum age is missing or too low",
+          "rationale": "A minimum password age can reduce rapid password cycling to bypass history controls.",
+          "recommendation": "Set PASS_MIN_DAYS to at least 1 if consistent with organizational policy."
+        },
+        {
+          "check_id": "AUTH-003",
+          "key": "PASS_MIN_LEN",
+          "operator": "int_gte",
+          "minimum": 12,
+          "severity": "medium",
+          "title_pass": "Password minimum length is configured",
+          "title_fail": "Password minimum length is weak or missing",
+          "rationale": "Longer passwords generally improve resistance to guessing and cracking attacks.",
+          "recommendation": "Set PASS_MIN_LEN to 12 or greater if compatible with the authentication stack."
+        },
+        {
+          "check_id": "AUTH-004",
+          "key": "PASS_WARN_AGE",
+          "operator": "int_gte",
+          "minimum": 7,
+          "severity": "low",
+          "title_pass": "Password expiration warning is configured",
+          "title_fail": "Password expiration warning is missing or too short",
+          "rationale": "Warning users before password expiration reduces operational disruption.",
+          "recommendation": "Set PASS_WARN_AGE to 7 or greater if password aging is used."
+        }
+      ]
+    },
+    "sysctl.conf": {
+      "parser": "key_value",
+      "category": "Kernel and Network Hardening",
+      "missing": {
+        "check_id": "SYSCTL-000",
+        "title": "sysctl.conf file is missing",
+        "severity": "medium",
+        "rationale": "Kernel and network hardening values could not be assessed.",
+        "recommendation": "Export sysctl.conf or equivalent sysctl output from the target system."
+      },
+      "rules": [
+        {
+          "check_id": "SYSCTL-001",
+          "key": "net.ipv4.ip_forward",
+          "operator": "equals",
+          "expected": "0",
+          "severity": "high",
+          "title_pass": "IP forwarding is disabled",
+          "title_fail": "IP forwarding is enabled or not explicitly disabled",
+          "rationale": "IP forwarding can turn a host into a router and may increase lateral movement or pivoting risk.",
+          "recommendation": "Set net.ipv4.ip_forward = 0 unless routing is explicitly required."
+        },
+        {
+          "check_id": "SYSCTL-002",
+          "key": "net.ipv4.conf.all.accept_redirects",
+          "operator": "equals",
+          "expected": "0",
+          "severity": "medium",
+          "title_pass": "ICMP redirects are disabled",
+          "title_fail": "ICMP redirects are enabled or not explicitly disabled",
+          "rationale": "Accepting redirects can allow malicious routing manipulation in some environments.",
+          "recommendation": "Set net.ipv4.conf.all.accept_redirects = 0."
+        },
+        {
+          "check_id": "SYSCTL-003",
+          "key": "net.ipv4.conf.all.send_redirects",
+          "operator": "equals",
+          "expected": "0",
+          "severity": "medium",
+          "title_pass": "Sending ICMP redirects is disabled",
+          "title_fail": "Sending ICMP redirects is enabled or not explicitly disabled",
+          "rationale": "Sending redirects is generally unnecessary for hardened non-router systems.",
+          "recommendation": "Set net.ipv4.conf.all.send_redirects = 0."
+        },
+        {
+          "check_id": "SYSCTL-004",
+          "key": "net.ipv4.tcp_syncookies",
+          "operator": "equals",
+          "expected": "1",
+          "severity": "low",
+          "title_pass": "TCP SYN cookies are enabled",
+          "title_fail": "TCP SYN cookies are disabled or not explicitly enabled",
+          "rationale": "SYN cookies can help improve resilience to SYN flood conditions.",
+          "recommendation": "Set net.ipv4.tcp_syncookies = 1."
+        }
+      ]
+    },
+    "firewall_status.txt": {
+      "parser": "firewall_status",
+      "category": "Firewall",
+      "missing": {
+        "check_id": "FW-001",
+        "title": "Firewall status export is missing",
+        "severity": "medium",
+        "rationale": "The tool could not determine whether a host firewall appears to be enabled.",
+        "recommendation": "Include a firewall status export such as ufw status, firewall-cmd state, or equivalent output."
+      },
+      "rule": {
+        "check_id": "FW-001",
+        "enabled_patterns": [
+          "status: active",
+          "active",
+          "running",
+          "enabled"
+        ],
+        "disabled_patterns": [
+          "inactive",
+          "disabled",
+          "not running",
+          "stopped"
+        ],
+        "severity": "high",
+        "title_pass": "Host firewall appears enabled",
+        "title_fail": "Host firewall does not appear enabled",
+        "rationale": "A host firewall can reduce exposed services and limit inbound traffic.",
+        "recommendation": "Enable and configure the host firewall according to system role and organizational policy."
+      }
+    },
+    "file_permissions.csv": {
+      "parser": "file_permissions",
+      "category": "File Permissions",
+      "missing": {
+        "check_id": "FILE-000",
+        "title": "File permission inventory is missing",
+        "severity": "low",
+        "rationale": "World-writable file checks require an exported file permission inventory.",
+        "recommendation": "Include a CSV with columns path, owner, group, mode."
+      },
+      "format_check_id": "FILE-002",
+      "format_severity": "low",
+      "rule": {
+        "check_id": "FILE-001",
+        "severity": "high",
+        "title_pass": "No world-writable files found in inventory",
+        "title_fail": "World-writable files found in inventory",
+        "rationale": "World-writable files can allow unauthorized modification if located in sensitive paths.",
+        "recommendation": "Remove world-writable permissions unless explicitly required and documented."
+      }
+    }
+  }
+}
