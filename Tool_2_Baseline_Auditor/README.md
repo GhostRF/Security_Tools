@@ -2,19 +2,42 @@
 
 ## Overview
 
-The Security Baseline Compliance Auditor is a defensive systems and infrastructure security tool that analyzes exported Linux-style configuration artifacts against a transparent security baseline. The tool is designed to help analysts, system administrators, students, and security teams quickly identify common configuration weaknesses in system hardening, SSH configuration, password policy, kernel/network settings, firewall posture, and file permissions.
+The Security Baseline Compliance Auditor is a defensive systems and
+infrastructure security tool that analyzes exported Linux-style configuration
+artifacts against a transparent baseline profile. It does not scan a live host,
+require privileged access, or modify system settings.
 
-## Problem Definition
+The tool was developed for CSC-842 Security Tool Development under the
+Systems, Software, & Infrastructure Security theme.
 
-Security teams often need to evaluate whether systems are configured according to an expected hardening baseline. In many environments, especially small organizations, lab systems, development systems, and student environments, there may not be a centralized compliance scanning platform available. Even when enterprise tools exist, analysts still need lightweight ways to review exported configuration artifacts, explain findings, and reproduce results.
+## Version 2.0.0 Refinement
 
-This tool addresses that problem by providing a portable Python-based baseline auditor that can run against sample or exported configuration files without requiring privileged access to the local system.
+Version 2.0.0 incorporates peer feedback by adding:
 
-The tool supports both octal permission formats, such as `0777`, `0666`, and `1777`, and symbolic permission formats, such as `rwxrwxrwx`, `-rw-rw-rw-`, and `drwxrwxrwx`. This makes the file-permission check more useful for realistic exported permission inventories because Linux permissions are commonly represented in both octal and symbolic formats.
+- External JSON baseline profiles
+- Profile selection through `--profile`
+- Automated standard-library regression tests
+- Optional CI/CD-friendly severity exit codes
+- Explicit malformed-input findings
+- Modular separation of parsing, checks, scoring, reporting, profiles, and CLI
+- A malformed sample dataset
+- A GitHub Actions test workflow
+- Rationale in the HTML report
 
-## What the Tool Checks
+The bundled profile remains a custom educational baseline. It is not presented
+as a formal CIS Benchmark or NIST certification profile.
 
-The current version evaluates the following Linux-style configuration artifacts:
+## Current Checks
+
+The bundled default profile performs 15 checks across:
+
+- SSH hardening
+- Account and password policy
+- Kernel and network hardening
+- Host firewall status
+- File permissions
+
+Input artifacts:
 
 - `sshd_config`
 - `login.defs`
@@ -22,110 +45,101 @@ The current version evaluates the following Linux-style configuration artifacts:
 - `firewall_status.txt`
 - `file_permissions.csv`
 
-The tool performs checks across these categories:
-
-- SSH hardening
-- Account and password policy
-- Kernel and network hardening
-- Host firewall status
-- File permission inventory review
-
-## Current Baseline Checks
-
-The current version includes 15 checks:
-
-- SSH root login restricted
-- SSH password authentication disabled
-- SSH empty passwords disabled
-- SSH X11 forwarding disabled
-- SSH authentication retries limited
-- Password maximum age configured
-- Password minimum age configured
-- Password minimum length configured
-- Password expiration warning configured
-- IP forwarding disabled
-- ICMP redirects disabled
-- Sending ICMP redirects disabled
-- TCP SYN cookies enabled
-- Host firewall appears enabled
-- No world-writable files found in the file permission inventory
-
-## Repository Structure
-
-```text
-Tool_2_Baseline_Auditor/
-├── baseline_auditor.py
-├── README.md
-├── requirements.txt
-├── samples/
-│   ├── secure_linux/
-│   └── insecure_linux/
-└── docs/
-    ├── DESIGN_NOTES.md
-    └── AI_USAGE.md
-```
-
 ## Requirements
 
-The tool uses Python 3 and the Python standard library only.
+- Python 3.9 or later
+- No third-party packages
 
-No third-party packages are required.
+## Quick Start
 
-## Setup
-
-Clone the repository and move into the tool directory:
-
-```bash
-git clone https://github.com/GhostRF/Security_Tools.git
-cd Security_Tools/Tool_2_Baseline_Auditor
-```
-
-Optional syntax check:
-
-```bash
-python3 -m py_compile baseline_auditor.py
-```
-
-## Usage
-
-Run the tool against the secure sample:
+Run the secure sample:
 
 ```bash
 python3 baseline_auditor.py samples/secure_linux -o output_secure
 ```
 
-Run the tool against the insecure sample:
+Run the insecure sample:
 
 ```bash
 python3 baseline_auditor.py samples/insecure_linux -o output_insecure
 ```
 
-Check the tool version:
+Run the malformed-input sample:
+
+```bash
+python3 baseline_auditor.py samples/malformed_linux -o output_malformed
+```
+
+Check the version:
 
 ```bash
 python3 baseline_auditor.py --version
 ```
 
-## Expected Results
+List bundled profiles:
 
-Secure sample expected result:
+```bash
+python3 baseline_auditor.py --list-profiles
+```
+
+## Profile Selection
+
+The default profile is loaded from `profiles/default.json`:
+
+```bash
+python3 baseline_auditor.py samples/secure_linux \
+  --profile default \
+  -o output_secure
+```
+
+A custom profile path can also be supplied:
+
+```bash
+python3 baseline_auditor.py exported_host \
+  --profile profiles/my-custom-profile.json \
+  -o output_custom
+```
+
+See `profiles/README.md` for the profile schema and supported operators.
+
+## Exit Codes
+
+Normal report-only behavior remains the default:
+
+- `0`: audit completed
+- `2`: invalid target or profile
+- `3`: runtime or output error
+
+For CI/CD use, enable severity-aware failure behavior:
+
+```bash
+python3 baseline_auditor.py samples/insecure_linux \
+  -o output_insecure \
+  --fail-on-findings \
+  --fail-level high
+```
+
+When `--fail-on-findings` is used:
+
+- `0`: no failed finding meets the threshold
+- `1`: at least one failed finding meets or exceeds the threshold
+
+Supported thresholds are `low`, `medium`, `high`, and `critical`.
+
+## Expected Sample Results
+
+Secure sample:
 
 ```text
-Security Baseline Compliance Auditor v1.1.0
 Baseline checks run: 15
 Passed: 15
 Failed: 0
 Compliance score: 100%
-Critical findings: 0
-High findings: 0
-Medium findings: 0
-Low findings: 0
 ```
 
-Insecure sample expected result:
+Insecure sample:
 
 ```text
-Security Baseline Compliance Auditor v1.1.0
 Baseline checks run: 15
 Passed: 0
 Failed: 15
@@ -136,23 +150,79 @@ Medium findings: 6
 Low findings: 3
 ```
 
+The malformed sample intentionally demonstrates explicit findings for
+unparseable values, malformed lines, and incomplete CSV records.
+
 ## Output Files
 
-The tool writes the following files to the selected output directory:
+The tool writes:
+
+- `findings.json`
+- `findings.csv`
+- `summary.txt`
+- `report.html`
+
+Each finding includes:
+
+- Check ID
+- Title
+- Status
+- Severity
+- Category
+- Evidence
+- Rationale
+- Recommendation
+
+## Automated Tests
+
+Run all tests:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+The test suite covers secure and insecure samples, malformed inputs, octal and
+symbolic permission formats, output generation, invalid target handling,
+severity exit codes, and profile customization.
+
+## Repository Structure
 
 ```text
-findings.json
-findings.csv
-summary.txt
-report.html
+Tool_2_Baseline_Auditor/
+├── baseline_auditor.py
+├── baseline_auditor_core/
+│   ├── checks.py
+│   ├── cli.py
+│   ├── models.py
+│   ├── parsers.py
+│   ├── profiles.py
+│   ├── reporters.py
+│   └── scoring.py
+├── profiles/
+│   ├── default.json
+│   └── README.md
+├── samples/
+│   ├── secure_linux/
+│   ├── insecure_linux/
+│   └── malformed_linux/
+├── tests/
+│   └── test_baseline_auditor.py
+└── docs/
+    ├── DESIGN_NOTES.md
+    ├── AI_USAGE.md
+    └── REFINEMENT_NOTES.md
 ```
 
 ## Known Limitations
 
-This tool does not directly scan the live operating system. It analyzes exported configuration artifacts. This design improves safety and reproducibility, but it also means the quality of the results depends on the accuracy and completeness of the provided input files.
-
-The current version focuses on Linux-style configuration files and does not yet support Windows baselines, cloud configuration exports, container security checks, Kubernetes manifests, or direct CIS Benchmark mapping.
+- The tool evaluates exported artifacts rather than live effective settings.
+- The default profile covers Linux-style artifacts only.
+- The included profile is custom and is not a formal compliance certification.
+- Firewall detection relies on common status strings.
+- The tool does not yet support Windows, cloud, containers, Kubernetes, or live
+  collection.
 
 ## Safety and Ethics
 
-This tool is defensive and does not exploit systems, modify configuration files, or perform intrusive scanning. It is intended for authorized assessment of exported configuration artifacts.
+The tool is defensive and non-intrusive. It should only be used with
+configuration artifacts the user is authorized to assess.

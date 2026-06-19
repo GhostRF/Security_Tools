@@ -2,43 +2,62 @@
 
 ## Overview
 
-AI assistance was used during the development of the Security Baseline Compliance Auditor for brainstorming, code structure, documentation drafting, troubleshooting, and refinement planning.
+AI assistance was used during initial development and the version 2.0.0
+refinement for planning, code structure, documentation drafting,
+troubleshooting, and test design. The author reviewed and validated the final
+implementation.
 
-The final tool was reviewed, tested, and validated by the author before submission.
+## Version 2.0.0 Assistance
 
-## How AI Was Used
+AI assistance supported:
 
-AI assistance was used to help:
+- Organizing peer feedback into actionable and deferred changes
+- Designing the external JSON profile schema
+- Refactoring the single script into focused modules
+- Adding malformed-input handling
+- Designing severity-aware exit behavior
+- Drafting standard-library automated tests
+- Updating documentation and refinement notes
 
-- Identify tool ideas that fit the Systems, Software, & Infrastructure Security theme
-- Select a tool concept that would be reproducible for peer review
-- Draft the initial Python structure
-- Create sample secure and insecure configuration artifacts
-- Draft README and design documentation
-- Troubleshoot local development workflow issues
-- Improve clarity around limitations, scoring, and future work
+## Accepted and Implemented Suggestions
 
-## Human Review and Modification
+After review and testing, the author accepted:
 
-The author reviewed and tested the generated code and documentation. The tool was run locally against both included sample datasets.
+- External JSON rule profiles
+- Modular separation of responsibilities
+- Automated regression tests
+- Optional nonzero exit codes for findings
+- Explicit malformed-input findings
+- A malformed sample dataset
+- CI test automation
 
-The author verified that the secure sample produced:
+## Modified Suggestions
 
-```text
-Baseline checks run: 15
-Passed: 15
-Failed: 0
-Compliance score: 100%
-```
+The peer recommendation referenced YAML or JSON. JSON was selected because it
+is supported by the Python standard library and preserves the project's
+no-third-party-dependency design.
 
-The author also reviewed the generated HTML reports to confirm that the findings, evidence, and recommendations appeared as expected.
+Formal NIST and CIS profiles were not labeled or claimed in this release.
+Instead, the tool now provides the profile mechanism needed for future mappings
+after each rule is validated against authoritative requirements.
 
+## Deferred Suggestions
 
-## Validation Performed Included
+Windows, cloud, container, Kubernetes, live collection, and validated
+framework-specific profiles were deferred because they require additional
+scope, source validation, and test data. They remain documented future work.
 
-Python syntax compilation using python3 -m py_compile
-Running the tool against the secure sample dataset
-Running the tool against the insecure sample dataset
-Reviewing terminal output
-Reviewing generated HTML reports
-Confirming JSON, CSV, text, and HTML outputs were created
+## Validation
+
+Validation included:
+
+- Python syntax compilation
+- Secure, insecure, and malformed sample runs
+- Automated unit and CLI tests
+- Exit-code verification
+- JSON, CSV, text, and HTML output generation
+- Custom-profile threshold testing
+- Octal and symbolic permission parsing tests
+
+AI assistance did not replace human testing or responsibility for the submitted
+tool.

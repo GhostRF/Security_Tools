@@ -2,137 +2,84 @@
 
 ## Purpose
 
-The tool provides a lightweight way to evaluate exported Linux-style configuration artifacts against a transparent security baseline. It is intended for defensive assessment, education, and reproducible peer review.
+The tool evaluates exported Linux-style configuration artifacts against a
+transparent baseline without requiring privileged access or modifying a target.
 
-## Problem Addressed
+## Version 2.0.0 Architecture
 
-Many organizations and small teams need to assess system hardening but may not have access to enterprise compliance scanners or centralized configuration management platforms. Even when those tools exist, analysts still need a simple way to review configuration artifacts, explain findings, and produce repeatable evidence.
+The original single-file implementation was divided into focused modules:
 
-This tool addresses that gap by analyzing exported configuration files rather than directly scanning or modifying a live system. This makes the tool safer and easier for classmates to reproduce.
+- `parsers.py`: text, key/value, integer, CSV, and permission parsing
+- `profiles.py`: external profile resolution and validation
+- `checks.py`: profile-driven evaluation and specialized checks
+- `scoring.py`: weighted summary and severity-threshold logic
+- `reporters.py`: JSON, CSV, text, and HTML output
+- `cli.py`: command-line arguments and exit behavior
+- `models.py`: shared immutable data classes
 
-## Design Goals
+`baseline_auditor.py` remains as a thin compatibility entry point, so the
+original execution command still works.
 
-The tool was designed around the following goals:
+## External Profile Design
 
-1. Reproducibility
-   - Other students should be able to clone the repository, run the tool, and reproduce the expected results using the included sample data.
+The default baseline now resides in `profiles/default.json`. Key/value rules
+declare:
 
-2. Safety
-   - The tool does not exploit systems, modify configuration files, require privileged access, or perform intrusive scanning.
+- Check ID
+- Artifact key
+- Comparison operator
+- Expected value or numeric threshold
+- Severity
+- Pass and fail titles
+- Rationale
+- Recommendation
 
-3. Transparency
-   - Each check has a visible rule, check ID, evidence field, rationale, and recommendation.
+This allows thresholds and expected values to be changed without editing Python
+source code. Specialized firewall and file-permission checks also take their
+titles, severities, patterns, and recommendations from the profile.
 
-4. Portability
-   - The tool uses Python 3 and the standard library only.
+The profile is intentionally identified as a custom educational baseline.
+Formal CIS or NIST mappings are deferred until each rule can be independently
+validated against the applicable source requirement.
 
-## Input Design
+## Input Validation
 
-The tool analyzes a target directory containing exported configuration artifacts. The current version expects files such as:
+Malformed numeric values now produce explicit failed findings rather than being
+silently treated as absent. Unparseable key/value lines and incomplete
+permission CSV records also produce Input Validation findings.
 
-- sshd_config
-- login.defs
-- sysctl.conf
-- firewall_status.txt
-- file_permissions.csv
+The parser continues processing valid records so one malformed entry does not
+prevent the remainder of the assessment.
 
-This approach allows the tool to run against both sample data and real exported system configuration files.
+## Exit Behavior
 
-## Baseline Categories
+Report-only use remains backward compatible and returns zero after a completed
+audit. Users may enable `--fail-on-findings` and select a minimum severity with
+`--fail-level`. This supports CI/CD workflows without forcing nonzero exits on
+interactive users.
 
-The current version includes checks across five categories:
+## Tests
 
-- SSH hardening
-- Account and password policy
-- Kernel and network hardening
-- Host firewall status
-- File permissions
+The standard-library `unittest` suite validates:
 
-## Output Design
+- Secure and insecure reference datasets
+- Expected severity totals and scores
+- Octal and symbolic permission parsing
+- Malformed values and rows
+- Missing target behavior
+- Output generation
+- Severity-aware exit codes
+- Profile customization without Python edits
 
-The tool generates four output files:
+## Scoring
 
-- findings.json
-- findings.csv
-- summary.txt
-- report.html
+The weighted scoring method preserves the original behavior. Failed findings
+use profile-defined severity weights, while passed checks use the profile's
+`pass_weight`. The score is a triage indicator rather than a formal compliance
+certification or validated organizational risk score.
 
-The JSON and CSV outputs support machine-readable review and follow-on analysis. The HTML report provides a human-readable summary for screenshots, demonstrations, and analyst review.
+## Remaining Limitations
 
-## Scoring Methodology
-
-The compliance score is a simple weighted triage indicator. Failed checks subtract weighted points based on severity:
-
-- Critical: 25
-- High: 15
-- Medium: 8
-- Low: 3
-
-The score is intended to help prioritize review. It is not a formal compliance certification, validated risk score, or replacement for a full security assessment.
-
-```text
-0777         expected=True actual=True PASS
-0666         expected=True actual=True PASS
-0644         expected=False actual=False PASS
-1777         expected=True actual=True PASS
-rwxrwxrwx    expected=True actual=True PASS
--rw-rw-rw-   expected=True actual=True PASS
-drwxrwxrwx   expected=True actual=True PASS
--rw-r--r--   expected=False actual=False PASS
-drwxr-xr-x   expected=False actual=False PASS
-
-## Test Results
-
-The tool was tested using two included sample datasets.
-
-Secure sample result:
-
-```text
-Baseline checks run: 15
-Passed: 15
-Failed: 0
-Compliance score: 100%
-Critical findings: 0
-High findings: 0
-Medium findings: 0
-Low findings: 0
-```
-Insecure sample result:
-```text
-Baseline checks run: 15
-Passed: 0
-Failed: 15
-Compliance score: 0%
-Critical findings: 2
-High findings: 4
-Medium findings: 6
-Low findings: 3
-```
-These tests demonstrate that the tool can distinguish between a baseline-aligned sample configuration and an intentionally insecure sample configuration.
-
-## Known Limitations
-
-The tool does not directly collect settings from a live host. It depends on exported configuration artifacts provided by the user.
-
-The current version focuses on Linux-style configuration files. It does not yet support Windows baselines, cloud configuration exports, Kubernetes manifests, container runtime configuration, or direct CIS Benchmark mapping.
-
-The current checks are intentionally simple and transparent. They should be expanded and validated before operational use.
-
-The compliance score is manually weighted and should be treated as a triage aid, not a formal measure of organizational risk.
-
-## Future Work
-
-Future improvements could include:
-
-- YAML-based external rule definitions
-- CIS Benchmark mapping
-- Windows baseline checks
-- Container and Kubernetes checks
-- Cloud configuration checks
-- Live local collection mode
-- More detailed scoring options
-- Better HTML styling and charts
-- Automated test cases
-- Additional sample datasets
-
-This tool is defensive and non-intrusive. It should only be used to assess systems or configuration artifacts that the user is authorized to review. The tool does not make configuration changes, exploit vulnerabilities, or perform active network scanning.
+The tool still analyzes exported artifacts rather than live effective
+configuration. It does not yet include validated CIS/NIST profiles, live
+collection, Windows, cloud, container, or Kubernetes checks.

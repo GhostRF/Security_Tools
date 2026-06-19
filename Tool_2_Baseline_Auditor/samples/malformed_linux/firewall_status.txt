@@ -1,0 +1,2 @@
+Status: active
+Default: deny incoming, allow outgoing

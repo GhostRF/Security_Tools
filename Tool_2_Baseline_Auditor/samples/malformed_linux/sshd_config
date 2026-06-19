@@ -1,0 +1,7 @@
+# Malformed sample for input-validation testing
+PermitRootLogin no
+PasswordAuthentication no
+PermitEmptyPasswords no
+X11Forwarding no
+MaxAuthTries many
+this_line_has_no_value

@@ -1,0 +1,54 @@
+name: Tool 2 Tests
+
+on:
+  push:
+    paths:
+      - "Tool_2_Baseline_Auditor/**"
+      - ".github/workflows/tool2-tests.yml"
+  pull_request:
+    paths:
+      - "Tool_2_Baseline_Auditor/**"
+      - ".github/workflows/tool2-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile source
+        working-directory: Tool_2_Baseline_Auditor
+        run: python -m py_compile baseline_auditor.py baseline_auditor_core/*.py
+
+      - name: Run tests
+        working-directory: Tool_2_Baseline_Auditor
+        run: python -m unittest discover -s tests -v
+
+      - name: Run secure sample
+        working-directory: Tool_2_Baseline_Auditor
+        run: python baseline_auditor.py samples/secure_linux -o output_secure
+
+      - name: Verify severity exit behavior
+        working-directory: Tool_2_Baseline_Auditor
+        shell: bash
+        run: |
+          set +e
+          python baseline_auditor.py samples/insecure_linux \
+            -o output_insecure \
+            --fail-on-findings \
+            --fail-level high
+          code=$?
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit code 1, received $code"
+            exit 1
+          fi

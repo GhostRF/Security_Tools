@@ -1,0 +1,3 @@
+path,owner,group,mode
+/etc/passwd,root,root,0644
+/tmp/incomplete,user,user,
