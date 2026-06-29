@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Set
+from typing import List, Set, Tuple
 
 from .detectors import detect_transforms
 from .indicators import extract_indicators
@@ -29,9 +29,12 @@ def analyze_bytes(
     source: str,
     config: AnalyzerConfig,
 ) -> AnalysisResult:
-    """Analyze bytes recursively without executing decoded content."""
+    """Analyze bytes recursively without executing content."""
 
-    root_text, root_encoding, root_warnings = bytes_to_text(data)
+    root_text, root_encoding, root_warnings = (
+        bytes_to_text(data)
+    )
+
     root_hash = sha256_hex(data)
 
     root_stage = Stage(
@@ -52,44 +55,91 @@ def analyze_bytes(
     )
 
     stages: List[Stage] = [root_stage]
-    processing_queue: List[Stage] = [root_stage]
-    observed_hashes: Set[str] = {root_hash}
+
+    processing_queue: List[
+        Tuple[Stage, bytes]
+    ] = [
+        (root_stage, data)
+    ]
+
+    observed_hashes: Set[str] = {
+        root_hash
+    }
+
     analysis_warnings: List[str] = []
 
     while processing_queue:
-        parent = processing_queue.pop(0)
+        parent, parent_data = (
+            processing_queue.pop(0)
+        )
 
         if parent.depth >= config.max_depth:
             analysis_warnings.append(
-                f"Stage {parent.stage_id} reached maximum depth "
-                f"{config.max_depth}. No additional decoding was attempted."
+                f"Stage {parent.stage_id} reached "
+                f"maximum depth {config.max_depth}. "
+                "No additional decoding was attempted."
             )
             continue
 
-        candidates = detect_transforms(parent.text)
+        allow_text_decoders = (
+            parent.printable_ratio
+            >= config.min_printable_ratio
+        )
+
+        candidates = detect_transforms(
+            parent.text,
+            parent_data,
+            allow_text=allow_text_decoders,
+            maximum_output_bytes=(
+                config.max_output_bytes
+            ),
+        )
 
         for candidate in candidates:
-            decoded_size = len(candidate.decoded)
+            if candidate.confidence <= 0:
+                analysis_warnings.extend(
+                    f"Stage {parent.stage_id}: "
+                    f"{warning}"
+                    for warning in candidate.warnings
+                )
+                continue
 
-            if decoded_size > config.max_output_bytes:
+            decoded_size = len(
+                candidate.decoded
+            )
+
+            if (
+                decoded_size
+                > config.max_output_bytes
+            ):
                 analysis_warnings.append(
-                    f"Skipped {candidate.transform} output from stage "
-                    f"{parent.stage_id}: {decoded_size} bytes exceeded "
-                    f"the configured limit of "
+                    f"Skipped {candidate.transform} "
+                    f"output from stage "
+                    f"{parent.stage_id}: "
+                    f"{decoded_size} bytes exceeded "
+                    "the configured limit of "
                     f"{config.max_output_bytes} bytes."
                 )
                 continue
 
-            output_hash = sha256_hex(candidate.decoded)
+            output_hash = sha256_hex(
+                candidate.decoded
+            )
 
             if output_hash in observed_hashes:
                 continue
 
-            decoded_text, encoding, decoding_warnings = bytes_to_text(
+            (
+                decoded_text,
+                encoding,
+                decoding_warnings,
+            ) = bytes_to_text(
                 candidate.decoded
             )
 
-            ratio = printable_ratio(decoded_text)
+            ratio = printable_ratio(
+                decoded_text
+            )
 
             child_stage = Stage(
                 stage_id=len(stages),
@@ -98,7 +148,9 @@ def analyze_bytes(
                 transform=candidate.transform,
                 confidence=candidate.confidence,
                 evidence=candidate.evidence,
-                input_sha256=parent.output_sha256,
+                input_sha256=(
+                    parent.output_sha256
+                ),
                 output_sha256=output_hash,
                 input_size=parent.output_size,
                 output_size=decoded_size,
@@ -111,17 +163,27 @@ def analyze_bytes(
                 ),
             )
 
+            if (
+                ratio
+                < config.min_printable_ratio
+            ):
+                child_stage.warnings.append(
+                    "The printable-character ratio "
+                    "was below the text-decoding "
+                    "threshold. Text-oriented decoders "
+                    "will be skipped, but binary "
+                    "signature decoders remain enabled."
+                )
+
             stages.append(child_stage)
             observed_hashes.add(output_hash)
 
-            if ratio >= config.min_printable_ratio:
-                processing_queue.append(child_stage)
-            else:
-                child_stage.warnings.append(
-                    "Decoded content was retained but was not recursively "
-                    "processed because its printable-character ratio was "
-                    "below the configured threshold."
+            processing_queue.append(
+                (
+                    child_stage,
+                    candidate.decoded,
                 )
+            )
 
     return AnalysisResult(
         source=source,
