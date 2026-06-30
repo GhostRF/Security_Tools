@@ -30,7 +30,7 @@ encoded transformation, command name, or dual-use utility.
 
 ## How Scores Are Assigned
 
-Version 0.1.0 uses fixed, rule-defined confidence values. Each rule author
+Version 1.0.0 uses fixed, rule-defined confidence values. Each rule author
 assigns a confidence value based on the specificity of the observable used by
 the rule.
 
