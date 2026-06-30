@@ -87,6 +87,7 @@ class AnalysisResult:
     indicators: List[Indicator]
     findings: List[TradecraftFinding] = field(default_factory=list)
     ruleset: Dict[str, str] = field(default_factory=dict)
+    provenance: Dict[str, Any] = field(default_factory=dict)
 
     # Retained internally so exact stage artifacts can be exported.
     # This field is intentionally omitted from to_dict() because bytes
@@ -104,6 +105,7 @@ class AnalysisResult:
         return {
             "source": self.source,
             "root_sha256": self.root_sha256,
+            "provenance": dict(self.provenance),
             "ruleset": dict(self.ruleset),
             "stages": [
                 stage.to_dict()

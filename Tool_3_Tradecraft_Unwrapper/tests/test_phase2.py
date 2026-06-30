@@ -155,9 +155,9 @@ class PhaseTwoTests(unittest.TestCase):
             )
         )
 
-    def test_lzma_xz_decompression(self) -> None:
+    def test_xz_decompression(self) -> None:
         command = (
-            b'Write-Output "LZMA pipeline test"'
+            b'Write-Output "XZ pipeline test"'
         )
 
         result = analyze_bytes(
@@ -171,8 +171,8 @@ class PhaseTwoTests(unittest.TestCase):
 
         self.assertTrue(
             any(
-                stage.transform == "lzma-xz"
-                and "LZMA pipeline test"
+                stage.transform == "xz"
+                and "XZ pipeline test"
                 in stage.text
                 for stage in result.stages
             )

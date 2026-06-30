@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from . import __version__
-from .pipeline import AnalyzerConfig, analyze_bytes
+from .pipeline import (
+    AnalysisLimitError,
+    AnalyzerConfig,
+    analyze_bytes,
+)
 from .reporters import write_reports
 from .tradecraft import RulesetError
 
@@ -66,6 +70,46 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--max-input-bytes",
+        type=int,
+        default=10_485_760,
+        help=(
+            "Maximum input-file or literal-text size "
+            "in bytes (default: 10485760)"
+        ),
+    )
+
+    parser.add_argument(
+        "--max-stages",
+        type=int,
+        default=100,
+        help=(
+            "Maximum number of stages, including the "
+            "original input (default: 100)"
+        ),
+    )
+
+    parser.add_argument(
+        "--max-total-bytes",
+        type=int,
+        default=10_485_760,
+        help=(
+            "Maximum cumulative bytes accepted from all "
+            "decoded stages (default: 10485760)"
+        ),
+    )
+
+    parser.add_argument(
+        "--max-xz-memory-bytes",
+        type=int,
+        default=67_108_864,
+        help=(
+            "Maximum memory allowed for XZ "
+            "decompression (default: 67108864)"
+        ),
+    )
+
+    parser.add_argument(
         "--min-printable-ratio",
         type=float,
         default=0.60,
@@ -112,6 +156,26 @@ def main(
             "--max-bytes must be greater than zero"
         )
 
+    if arguments.max_input_bytes <= 0:
+        parser.error(
+            "--max-input-bytes must be greater than zero"
+        )
+
+    if arguments.max_stages <= 0:
+        parser.error(
+            "--max-stages must be greater than zero"
+        )
+
+    if arguments.max_total_bytes <= 0:
+        parser.error(
+            "--max-total-bytes must be greater than zero"
+        )
+
+    if arguments.max_xz_memory_bytes <= 0:
+        parser.error(
+            "--max-xz-memory-bytes must be greater than zero"
+        )
+
     if not 0.0 <= arguments.min_printable_ratio <= 1.0:
         parser.error(
             "--min-printable-ratio must be between 0 and 1"
@@ -120,6 +184,15 @@ def main(
     if arguments.text is not None:
         source = "<literal-text>"
         data = arguments.text.encode("utf-8")
+
+        if len(data) > arguments.max_input_bytes:
+            print(
+                "[ERROR] Literal text contained "
+                f"{len(data)} bytes, which exceeded "
+                "the configured maximum input size of "
+                f"{arguments.max_input_bytes} bytes."
+            )
+            return 5
     else:
         input_path = Path(arguments.input).expanduser()
 
@@ -129,6 +202,24 @@ def main(
                 f"{input_path}"
             )
             return 2
+
+        try:
+            input_size = input_path.stat().st_size
+        except OSError as error:
+            print(
+                "[ERROR] Could not inspect input file: "
+                f"{error}"
+            )
+            return 3
+
+        if input_size > arguments.max_input_bytes:
+            print(
+                "[ERROR] Input file contained "
+                f"{input_size} bytes, which exceeded "
+                "the configured maximum input size of "
+                f"{arguments.max_input_bytes} bytes."
+            )
+            return 5
 
         try:
             data = input_path.read_bytes()
@@ -150,6 +241,14 @@ def main(
     configuration = AnalyzerConfig(
         max_depth=arguments.max_depth,
         max_output_bytes=arguments.max_bytes,
+        max_input_bytes=arguments.max_input_bytes,
+        max_stages=arguments.max_stages,
+        max_total_output_bytes=(
+            arguments.max_total_bytes
+        ),
+        max_xz_memory_bytes=(
+            arguments.max_xz_memory_bytes
+        ),
         min_printable_ratio=arguments.min_printable_ratio,
         rules_path=rules_path,
     )
@@ -160,6 +259,12 @@ def main(
             source,
             configuration,
         )
+    except AnalysisLimitError as error:
+        print(
+            "[ERROR] Analysis resource limit: "
+            f"{error}"
+        )
+        return 5
     except RulesetError as error:
         print(
             "[ERROR] Could not load tradecraft rules: "
@@ -188,10 +293,10 @@ def main(
     )
     print(f"Source: {source}")
     print(
-        f"Stages observed: {len(result.stages)}"
+        f"Unique stages recorded: {len(result.stages)}"
     )
     print(
-        "Decoded stages: "
+        "Derived stages: "
         f"{max(0, len(result.stages) - 1)}"
     )
     print(

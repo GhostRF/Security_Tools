@@ -235,7 +235,7 @@ class PipelineTests(unittest.TestCase):
             )
 
             self.assertIn(
-                "Decoded stages:",
+                "Derived stages:",
                 completed.stdout,
             )
 

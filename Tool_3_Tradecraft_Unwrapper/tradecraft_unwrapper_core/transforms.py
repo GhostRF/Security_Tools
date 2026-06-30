@@ -75,6 +75,149 @@ def _warning_candidate(
     )
 
 
+def _base64_output_size(value: str) -> int:
+    """Return the exact decoded size of padded Base64 text."""
+
+    padded = _add_base64_padding(value)
+    padding = len(padded) - len(
+        padded.rstrip("=")
+    )
+
+    return (
+        (len(padded) // 4) * 3
+        - padding
+    )
+
+
+def _utf8_size(text: str) -> int:
+    """Return the UTF-8 byte size of text."""
+
+    return len(
+        text.encode(
+            "utf-8",
+            errors="replace",
+        )
+    )
+
+
+def _percent_decoded_size(text: str) -> int:
+    """Calculate URL-percent output size without decoding it."""
+
+    size = 0
+    index = 0
+
+    while index < len(text):
+        if (
+            text[index] == "%"
+            and index + 2 < len(text)
+            and all(
+                character in "0123456789abcdefABCDEF"
+                for character in text[
+                    index + 1:index + 3
+                ]
+            )
+        ):
+            size += 1
+            index += 3
+            continue
+
+        size += len(
+            text[index].encode(
+                "utf-8",
+                errors="replace",
+            )
+        )
+        index += 1
+
+    return size
+
+
+def _output_limit_candidate(
+    transform: str,
+    evidence: str,
+    estimated_size: int,
+    maximum_output_bytes: int,
+) -> TransformCandidate:
+    """Create a warning when output would exceed its limit."""
+
+    return _warning_candidate(
+        transform,
+        evidence,
+        (
+            f"{transform} output was estimated at "
+            f"{estimated_size} bytes and exceeded "
+            "the configured maximum decoded size of "
+            f"{maximum_output_bytes} bytes."
+        ),
+    )
+
+
+def _decoded_content_quality(
+    data: bytes,
+) -> Tuple[bool, str]:
+    """Evaluate whether decoded bytes are analytically plausible.
+
+    Text is considered plausible when it is substantially
+    printable and contains at least one alphanumeric character.
+    Supported compressed-data signatures are also accepted so
+    recursive decompression can continue.
+    """
+
+    signatures = (
+        (b"\x1f\x8b", "gzip"),
+        (b"BZh", "Bzip2"),
+        (b"\xfd7zXZ\x00", "XZ"),
+    )
+
+    for signature, name in signatures:
+        if data.startswith(signature):
+            return (
+                True,
+                f"Decoded bytes contained a recognized "
+                f"{name} signature",
+            )
+
+    if len(data) >= 2:
+        compression_method = data[0] & 0x0F
+        header_value = (
+            data[0] << 8
+        ) + data[1]
+
+        if (
+            compression_method == 8
+            and header_value % 31 == 0
+        ):
+            return (
+                True,
+                "Decoded bytes contained a valid-looking "
+                "zlib header",
+            )
+
+    decoded_text, encoding, _ = bytes_to_text(data)
+    ratio = printable_ratio(decoded_text)
+
+    contains_signal = any(
+        character.isalnum()
+        for character in decoded_text
+        if character != "\ufffd"
+    )
+
+    if ratio >= 0.85 and contains_signal:
+        return (
+            True,
+            "Decoded content was interpreted as "
+            f"{encoding} with a printable-character "
+            f"ratio of {ratio:.3f}",
+        )
+
+    return (
+        False,
+        "Decoded content did not contain a recognized "
+        "compressed-data signature or sufficiently "
+        "plausible text",
+    )
+
+
 def sha256_hex(data: bytes) -> str:
     """Return the SHA-256 digest of a byte sequence."""
 
@@ -82,7 +225,11 @@ def sha256_hex(data: bytes) -> str:
 
 
 def printable_ratio(text: str) -> float:
-    """Calculate the proportion of printable text characters."""
+    """Calculate the proportion of inspectable characters.
+
+    Unicode replacement characters are not counted as printable
+    because they represent bytes that could not be decoded.
+    """
 
     if not text:
         return 1.0
@@ -90,8 +237,13 @@ def printable_ratio(text: str) -> float:
     printable_characters = sum(
         1
         for character in text
-        if character.isprintable()
-        or character in "\r\n\t"
+        if (
+            character != "\ufffd"
+            and (
+                character.isprintable()
+                or character in "\r\n\t"
+            )
+        )
     )
 
     return printable_characters / len(text)
@@ -177,8 +329,9 @@ def bytes_to_text(
 
 def decode_base64_text(
     text: str,
+    maximum_output_bytes: int = 1_048_576,
 ) -> List[TransformCandidate]:
-    """Decode a complete Base64 text stage."""
+    """Decode a plausible complete Base64 text stage."""
 
     candidate_text = _remove_whitespace(
         text.strip()
@@ -192,9 +345,44 @@ def decode_base64_text(
     ):
         return []
 
+    hexadecimal_value = candidate_text
+
+    if hexadecimal_value.lower().startswith("0x"):
+        hexadecimal_value = hexadecimal_value[2:]
+
+    if (
+        _HEX_PATTERN.fullmatch(candidate_text)
+        and len(hexadecimal_value) >= 8
+        and len(hexadecimal_value) % 2 == 0
+    ):
+        # Prefer the explicit hexadecimal interpretation.
+        # This avoids generating duplicate Base64 branches from
+        # values such as 41424344 or deadbeef.
+        return []
+
     padded = _add_base64_padding(
         candidate_text
     )
+
+    evidence = (
+        "The complete stage matched a Base64 alphabet, "
+        "decoded using strict validation, and produced "
+        "analytically plausible content."
+    )
+
+    estimated_size = _base64_output_size(
+        candidate_text
+    )
+
+    if estimated_size > maximum_output_bytes:
+        return [
+            _output_limit_candidate(
+                "base64",
+                evidence,
+                estimated_size,
+                maximum_output_bytes,
+            )
+        ]
 
     candidates: List[TransformCandidate] = []
 
@@ -220,15 +408,36 @@ def decode_base64_text(
         if not decoded:
             continue
 
+        explicit_url_safe = (
+            transform_name == "base64-url"
+            and any(
+                character in candidate_text
+                for character in "-_"
+            )
+        )
+
+        if explicit_url_safe:
+            plausible = True
+            quality_basis = (
+                "The source used explicit URL-safe "
+                "Base64 characters and decoded using "
+                "strict validation"
+            )
+        else:
+            plausible, quality_basis = (
+                _decoded_content_quality(decoded)
+            )
+
+        if not plausible:
+            continue
+
         candidates.append(
             TransformCandidate(
                 transform=transform_name,
                 decoded=decoded,
                 confidence=confidence,
                 evidence=(
-                    "The complete stage matched a Base64 "
-                    "alphabet and decoded successfully using "
-                    "strict validation."
+                    f"{evidence} {quality_basis}."
                 ),
             )
         )
@@ -246,6 +455,7 @@ def decode_base64_text(
 
 def decode_powershell_encoded_command(
     text: str,
+    maximum_output_bytes: int = 1_048_576,
 ) -> List[TransformCandidate]:
     """Decode PowerShell EncodedCommand arguments as UTF-16LE."""
 
@@ -256,9 +466,32 @@ def decode_powershell_encoded_command(
             text
         )
     ):
+        payload = match.group("payload")
         encoded_payload = _add_base64_padding(
-            match.group("payload")
+            payload
         )
+
+        estimated_size = _base64_output_size(
+            payload
+        )
+
+        evidence = (
+            "A PowerShell EncodedCommand "
+            "argument was observed and its "
+            "payload decoded successfully as "
+            "UTF-16LE."
+        )
+
+        if estimated_size > maximum_output_bytes:
+            candidates.append(
+                _output_limit_candidate(
+                    "powershell-encoded-command",
+                    evidence,
+                    estimated_size,
+                    maximum_output_bytes,
+                )
+            )
+            continue
 
         try:
             decoded = base64.b64decode(
@@ -284,12 +517,7 @@ def decode_powershell_encoded_command(
                 ),
                 decoded=decoded,
                 confidence=100,
-                evidence=(
-                    "A PowerShell EncodedCommand "
-                    "argument was observed and its "
-                    "payload decoded successfully as "
-                    "UTF-16LE."
-                ),
+                evidence=evidence,
             )
         )
 
@@ -298,8 +526,9 @@ def decode_powershell_encoded_command(
 
 def decode_hex_text(
     text: str,
+    maximum_output_bytes: int = 1_048_576,
 ) -> List[TransformCandidate]:
-    """Decode a complete hexadecimal stage."""
+    """Decode a plausible complete hexadecimal stage."""
 
     candidate_text = _remove_whitespace(
         text.strip()
@@ -319,6 +548,24 @@ def decode_hex_text(
     ):
         return []
 
+    evidence = (
+        "The complete stage contained an even-length "
+        "hexadecimal value, decoded successfully, and "
+        "produced analytically plausible content."
+    )
+
+    estimated_size = len(candidate_text) // 2
+
+    if estimated_size > maximum_output_bytes:
+        return [
+            _output_limit_candidate(
+                "hex",
+                evidence,
+                estimated_size,
+                maximum_output_bytes,
+            )
+        ]
+
     try:
         decoded = bytes.fromhex(candidate_text)
     except ValueError:
@@ -327,15 +574,20 @@ def decode_hex_text(
     if not decoded:
         return []
 
+    plausible, quality_basis = (
+        _decoded_content_quality(decoded)
+    )
+
+    if not plausible:
+        return []
+
     return [
         TransformCandidate(
             transform="hex",
             decoded=decoded,
             confidence=90,
             evidence=(
-                "The complete stage contained an "
-                "even-length hexadecimal value and "
-                "decoded successfully."
+                f"{evidence} {quality_basis}."
             ),
         )
     ]
@@ -343,11 +595,30 @@ def decode_hex_text(
 
 def decode_url_percent(
     text: str,
+    maximum_output_bytes: int = 1_048_576,
 ) -> List[TransformCandidate]:
     """Decode percent-encoded bytes without network activity."""
 
     if not _PERCENT_PATTERN.search(text):
         return []
+
+    evidence = (
+        "The stage contained percent-encoded "
+        "byte sequences that produced different "
+        "decoded content."
+    )
+
+    estimated_size = _percent_decoded_size(text)
+
+    if estimated_size > maximum_output_bytes:
+        return [
+            _output_limit_candidate(
+                "url-percent",
+                evidence,
+                estimated_size,
+                maximum_output_bytes,
+            )
+        ]
 
     try:
         decoded = unquote_to_bytes(text)
@@ -367,19 +638,33 @@ def decode_url_percent(
             transform="url-percent",
             decoded=decoded,
             confidence=85,
-            evidence=(
-                "The stage contained percent-encoded "
-                "byte sequences that produced different "
-                "decoded content."
-            ),
+            evidence=evidence,
         )
     ]
 
 
 def decode_html_entities(
     text: str,
+    maximum_output_bytes: int = 1_048_576,
 ) -> List[TransformCandidate]:
     """Decode HTML character entities."""
+
+    evidence = (
+        "HTML character entities were present "
+        "and produced different decoded content."
+    )
+
+    maximum_possible_size = _utf8_size(text)
+
+    if maximum_possible_size > maximum_output_bytes:
+        return [
+            _output_limit_candidate(
+                "html-entity",
+                evidence,
+                maximum_possible_size,
+                maximum_output_bytes,
+            )
+        ]
 
     decoded = unescape(text)
 
@@ -391,22 +676,38 @@ def decode_html_entities(
             transform="html-entity",
             decoded=decoded.encode("utf-8"),
             confidence=80,
-            evidence=(
-                "HTML character entities were present "
-                "and produced different decoded content."
-            ),
+            evidence=evidence,
         )
     ]
 
 
 def reconstruct_string_concatenation(
     text: str,
+    maximum_output_bytes: int = 1_048_576,
 ) -> List[TransformCandidate]:
     """Safely join simple quoted strings connected by plus signs.
 
     This function performs literal reconstruction only. It does not
     evaluate variables, functions, expressions, or executable code.
     """
+
+    evidence = (
+        "Two or more quoted string literals "
+        "joined with plus signs were safely "
+        "reconstructed without evaluating code."
+    )
+
+    maximum_possible_size = _utf8_size(text)
+
+    if maximum_possible_size > maximum_output_bytes:
+        return [
+            _output_limit_candidate(
+                "string-concatenation",
+                evidence,
+                maximum_possible_size,
+                maximum_output_bytes,
+            )
+        ]
 
     matches = list(
         _CONCATENATION_PATTERN.finditer(text)
@@ -460,21 +761,41 @@ def reconstruct_string_concatenation(
             transform="string-concatenation",
             decoded=reconstructed.encode("utf-8"),
             confidence=75,
-            evidence=(
-                "Two or more quoted string literals "
-                "joined with plus signs were safely "
-                "reconstructed without evaluating code."
-            ),
+            evidence=evidence,
         )
     ]
+
+
+def _trailing_data_warning(
+    format_name: str,
+    trailing_bytes: int,
+) -> str:
+    """Describe bytes remaining after one compressed member."""
+
+    unit = (
+        "byte"
+        if trailing_bytes == 1
+        else "bytes"
+    )
+
+    return (
+        f"{trailing_bytes} trailing {unit} remained "
+        f"after the first {format_name} compressed "
+        "member. Additional members or appended data "
+        "were not processed."
+    )
 
 
 def _decompress_zlib_limited(
     data: bytes,
     window_bits: int,
     maximum_output_bytes: int,
-) -> bytes:
-    """Decompress gzip or zlib while enforcing an output limit."""
+) -> Tuple[bytes, bytes]:
+    """Decompress gzip or zlib with an output limit.
+
+    Return the decoded first member and any bytes that
+    remained after that member.
+    """
 
     decompressor = zlib.decompressobj(
         window_bits
@@ -498,23 +819,29 @@ def _decompress_zlib_limited(
         )
 
     remaining = (
-        maximum_output_bytes + 1 - len(output)
+        maximum_output_bytes + 1
+        - len(output)
     )
 
     if remaining > 0:
-        output += decompressor.flush(remaining)
+        output += decompressor.flush(
+            remaining
+        )
 
     if len(output) > maximum_output_bytes:
         raise OutputLimitError
 
-    return output
+    return (
+        output,
+        decompressor.unused_data,
+    )
 
 
 def decode_gzip_bytes(
     data: bytes,
     maximum_output_bytes: int,
 ) -> List[TransformCandidate]:
-    """Decode a gzip stream identified by its magic bytes."""
+    """Decode the first gzip member identified by magic bytes."""
 
     if not data.startswith(b"\x1f\x8b"):
         return []
@@ -525,10 +852,12 @@ def decode_gzip_bytes(
     )
 
     try:
-        decoded = _decompress_zlib_limited(
-            data,
-            16 + zlib.MAX_WBITS,
-            maximum_output_bytes,
+        decoded, trailing_data = (
+            _decompress_zlib_limited(
+                data,
+                16 + zlib.MAX_WBITS,
+                maximum_output_bytes,
+            )
         )
     except OutputLimitError:
         return [
@@ -548,12 +877,23 @@ def decode_gzip_bytes(
             )
         ]
 
+    warnings: List[str] = []
+
+    if trailing_data:
+        warnings.append(
+            _trailing_data_warning(
+                "gzip",
+                len(trailing_data),
+            )
+        )
+
     return [
         TransformCandidate(
             transform="gzip",
             decoded=decoded,
             confidence=100,
             evidence=evidence,
+            warnings=warnings,
         )
     ]
 
@@ -579,7 +919,7 @@ def decode_zlib_bytes(
     data: bytes,
     maximum_output_bytes: int,
 ) -> List[TransformCandidate]:
-    """Decode a zlib stream after validating its header."""
+    """Decode the first zlib stream after header validation."""
 
     if not _looks_like_zlib(data):
         return []
@@ -590,10 +930,12 @@ def decode_zlib_bytes(
     )
 
     try:
-        decoded = _decompress_zlib_limited(
-            data,
-            zlib.MAX_WBITS,
-            maximum_output_bytes,
+        decoded, trailing_data = (
+            _decompress_zlib_limited(
+                data,
+                zlib.MAX_WBITS,
+                maximum_output_bytes,
+            )
         )
     except OutputLimitError:
         return [
@@ -613,12 +955,23 @@ def decode_zlib_bytes(
             )
         ]
 
+    warnings: List[str] = []
+
+    if trailing_data:
+        warnings.append(
+            _trailing_data_warning(
+                "zlib",
+                len(trailing_data),
+            )
+        )
+
     return [
         TransformCandidate(
             transform="zlib",
             decoded=decoded,
             confidence=95,
             evidence=evidence,
+            warnings=warnings,
         )
     ]
 
@@ -627,7 +980,7 @@ def decode_bzip2_bytes(
     data: bytes,
     maximum_output_bytes: int,
 ) -> List[TransformCandidate]:
-    """Decode a Bzip2 stream identified by its BZh signature."""
+    """Decode the first Bzip2 member identified by BZh."""
 
     if not data.startswith(b"BZh"):
         return []
@@ -681,32 +1034,45 @@ def decode_bzip2_bytes(
             )
         ]
 
+    warnings: List[str] = []
+
+    if decompressor.unused_data:
+        warnings.append(
+            _trailing_data_warning(
+                "Bzip2",
+                len(decompressor.unused_data),
+            )
+        )
+
     return [
         TransformCandidate(
             transform="bzip2",
             decoded=decoded,
             confidence=100,
             evidence=evidence,
+            warnings=warnings,
         )
     ]
 
 
-def decode_lzma_bytes(
+def decode_xz_bytes(
     data: bytes,
     maximum_output_bytes: int,
+    maximum_memory_bytes: int = 67_108_864,
 ) -> List[TransformCandidate]:
-    """Decode an XZ/LZMA stream identified by the XZ signature."""
+    """Decode the first XZ member under size and memory limits."""
 
     if not data.startswith(b"\xfd7zXZ\x00"):
         return []
 
     evidence = (
         "The stage began with the XZ container "
-        "signature used for LZMA-compressed data."
+        "signature used for LZMA2-compressed data."
     )
 
     decompressor = lzma.LZMADecompressor(
-        format=lzma.FORMAT_AUTO
+        format=lzma.FORMAT_XZ,
+        memlimit=maximum_memory_bytes,
     )
 
     try:
@@ -715,20 +1081,34 @@ def decode_lzma_bytes(
             max_length=maximum_output_bytes + 1,
         )
     except lzma.LZMAError as error:
+        message = str(error)
+
+        if "memory" in message.lower():
+            warning = (
+                "XZ decompression exceeded the "
+                "configured memory limit of "
+                f"{maximum_memory_bytes} bytes."
+            )
+        else:
+            warning = (
+                "Malformed XZ stream: "
+                f"{error}"
+            )
+
         return [
             _warning_candidate(
-                "lzma-xz",
+                "xz",
                 evidence,
-                f"Malformed XZ/LZMA stream: {error}",
+                warning,
             )
         ]
 
     if len(decoded) > maximum_output_bytes:
         return [
             _warning_candidate(
-                "lzma-xz",
+                "xz",
                 evidence,
-                "XZ/LZMA output exceeded the configured "
+                "XZ output exceeded the configured "
                 "maximum decoded size.",
             )
         ]
@@ -737,26 +1117,37 @@ def decode_lzma_bytes(
         if not decompressor.needs_input:
             return [
                 _warning_candidate(
-                    "lzma-xz",
+                    "xz",
                     evidence,
-                    "XZ/LZMA output exceeded the configured "
+                    "XZ output exceeded the configured "
                     "maximum decoded size.",
                 )
             ]
 
         return [
             _warning_candidate(
-                "lzma-xz",
+                "xz",
                 evidence,
-                "The XZ/LZMA stream was incomplete.",
+                "The XZ stream was incomplete.",
             )
         ]
 
+    warnings: List[str] = []
+
+    if decompressor.unused_data:
+        warnings.append(
+            _trailing_data_warning(
+                "XZ",
+                len(decompressor.unused_data),
+            )
+        )
+
     return [
         TransformCandidate(
-            transform="lzma-xz",
+            transform="xz",
             decoded=decoded,
             confidence=100,
             evidence=evidence,
+            warnings=warnings,
         )
     ]

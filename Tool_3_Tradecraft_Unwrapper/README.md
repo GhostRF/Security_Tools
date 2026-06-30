@@ -57,7 +57,7 @@ Tradecraft Unwrapper currently supports:
 - Gzip compression
 - Zlib compression
 - Bzip2 compression
-- XZ/LZMA compression
+- XZ compression
 
 ## Analysis Capabilities
 
@@ -134,7 +134,7 @@ See [`docs/SAFETY.md`](docs/SAFETY.md) for the complete safety model.
 
 ## Requirements
 
-- Python 3.10 or newer
+- Python 3.10 through 3.13
 - No third-party Python packages
 
 The implementation uses only the Python standard library.
@@ -467,8 +467,8 @@ python3 tradecraft_unwrapper.py \
 Expected command-line totals:
 
 ~~~text
-Stages observed: 2
-Decoded stages: 1
+Unique stages recorded: 2
+Derived stages: 1
 Indicators extracted: 2
 Tradecraft findings: 3
 ~~~
@@ -525,12 +525,12 @@ Run the complete automated test suite:
 python3 -m unittest discover -s tests -v
 ~~~
 
-The current suite contains 37 tests.
+The current suite contains 64 tests.
 
 Expected conclusion:
 
 ~~~text
-Ran 37 tests
+Ran 64 tests
 OK
 ~~~
 
@@ -546,7 +546,7 @@ The suite covers:
 - Gzip
 - Zlib
 - Bzip2
-- XZ/LZMA
+- XZ
 - Recursive processing
 - Maximum recursion depth
 - Maximum decoded output

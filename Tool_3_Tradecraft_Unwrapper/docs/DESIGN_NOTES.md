@@ -70,7 +70,9 @@ Each stage records:
 - Printable-character ratio
 - Warnings
 
-`AnalysisResult.stage_bytes` retains the exact byte content of every stage. These bytes are excluded from JSON serialization and exported separately as `.bin` files.
+`AnalysisResult.stage_bytes` retains the exact byte content of every recorded stage. These bytes are excluded from JSON serialization and exported separately as `.bin` files.
+
+`AnalysisResult.provenance` records the tool version, Python version, UTC generation time, static-analysis mode, active resource limits, and unique-stage lineage policy.
 
 ## Transformation Detection
 
@@ -78,9 +80,9 @@ Each stage records:
 
 Text-oriented transformations are attempted only when the stage meets the configured printable-character threshold.
 
-Binary signature detection remains available for low-printability content so that a decoded gzip, zlib, Bzip2, or XZ/LZMA stream can continue through the pipeline.
+Binary signature detection remains available for low-printability content so that a decoded gzip, zlib, Bzip2, or XZ stream can continue through the pipeline.
 
-Whole-stage Base64 and hexadecimal detection is intentionally conservative. The complete normalized stage must match the expected alphabet before decoding is attempted.
+Whole-stage Base64 and hexadecimal detection is intentionally conservative. The complete normalized stage must match the expected alphabet before decoding is attempted. Decoded content must also be plausible text or begin with a recognized compressed-data signature. Explicit URL-safe Base64 containing `-` or `_` may preserve validated binary output.
 
 ## Safe Transformations
 
@@ -98,11 +100,11 @@ Supported operations include:
 - Gzip
 - Zlib
 - Bzip2
-- XZ/LZMA
+- XZ
 
 Simple quoted-string concatenation uses `ast.literal_eval` only for isolated string literals. It does not evaluate variables, function calls, or arbitrary expressions.
 
-Compressed-output limits reduce the risk of excessive decompression expansion.
+Resource controls include maximum input size, recursion depth, stage count, per-stage decoded output, cumulative decoded output, XZ memory use, and transformation preallocation checks. Compressed decoders reconstruct the first supported stream and report remaining members or appended bytes as trailing data.
 
 ## Recursive Analysis
 
@@ -119,7 +121,7 @@ For each accepted transformation candidate, the pipeline:
 
 The configured maximum depth limits recursive processing.
 
-Duplicate-hash suppression prevents redundant work and transformation loops.
+Duplicate-hash suppression prevents redundant work and transformation loops. The recorded lineage contains one stage for each unique output SHA-256 value. When a later transformation produces identical bytes, the duplicate is suppressed and a warning identifies the attempted transform, parent stage, duplicate hash, and existing stage ID.
 
 ## Indicator Extraction
 
@@ -180,6 +182,8 @@ See `CONFIDENCE_MODEL.md` for the complete confidence model.
 - `summary.txt`
 - `report.html`
 - Exact `.bin` stage artifacts
+- Execution provenance
+- Active resource-limit metadata
 - Readable `.txt` stage previews
 
 All analyzed text is escaped before HTML rendering.
@@ -190,6 +194,7 @@ Each HTML stage section links to its raw-byte artifact and text preview.
 
 - Missing input files return exit code 2.
 - Input-read and report-write failures return exit code 3.
+- A nonempty output directory is treated as a report-write failure and is not silently overwritten.
 - Invalid tradecraft rules return exit code 4.
 - Successful analysis returns exit code 0.
 
@@ -199,7 +204,7 @@ Malformed or excessive compressed content produces visible warnings rather than 
 
 Version 1.0.0 uses only the Python standard library.
 
-Python 3.10 or newer is required because the implementation uses modern Python type-annotation syntax.
+Python 3.10 through 3.13 are the documented and CI-validated support range. Successful execution on another Python version does not expand the officially supported range.
 
 ## Deliberately Unsupported Behavior
 

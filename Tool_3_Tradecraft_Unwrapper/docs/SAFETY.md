@@ -36,15 +36,32 @@ URLs, domains, and addresses are extracted as text indicators only.
 
 The tool provides:
 
+- Maximum input size
 - Maximum recursive depth
+- Maximum recorded stage count
 - Maximum decoded bytes per stage
+- Maximum cumulative decoded bytes
+- XZ decompression memory limit
+- Transformation preallocation checks
 - Printable-character threshold
-- Duplicate-hash suppression
+- Duplicate-hash suppression with visible warnings
 - Bounded decompression
 
-These controls reduce the risks of uncontrolled recursion, duplicate processing, and excessive decompression expansion.
+These controls reduce the risks of uncontrolled recursion, duplicate processing, excessive memory allocation, and decompression expansion.
+
+Compressed decoders reconstruct only the first gzip, zlib, Bzip2, or XZ stream. Remaining members or appended bytes are reported as trailing data and are not silently processed.
 
 They do not make the tool a hardened malware sandbox.
+
+## Output Isolation
+
+The selected output directory must be new or empty. The tool refuses
+to mix a new analysis with reports or stage artifacts from an earlier
+run. A `.gitkeep` placeholder does not prevent use of an otherwise
+empty directory.
+
+This behavior prevents stale files from being mistaken for artifacts
+produced by the current analysis.
 
 ## HTML Safety
 
