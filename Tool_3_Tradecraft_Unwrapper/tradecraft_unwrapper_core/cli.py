@@ -9,6 +9,7 @@ from typing import Optional, Sequence
 from . import __version__
 from .pipeline import AnalyzerConfig, analyze_bytes
 from .reporters import write_reports
+from .tradecraft import RulesetError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +38,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         default="output",
         help="Output directory (default: output)",
+    )
+
+    parser.add_argument(
+        "--rules",
+        help=(
+            "Path to an external JSON tradecraft rule set. "
+            "The bundled default rules are used when omitted."
+        ),
     )
 
     parser.add_argument(
@@ -132,17 +141,31 @@ def main(
 
         source = str(input_path)
 
+    rules_path = (
+        Path(arguments.rules).expanduser()
+        if arguments.rules
+        else None
+    )
+
     configuration = AnalyzerConfig(
         max_depth=arguments.max_depth,
         max_output_bytes=arguments.max_bytes,
         min_printable_ratio=arguments.min_printable_ratio,
+        rules_path=rules_path,
     )
 
-    result = analyze_bytes(
-        data,
-        source,
-        configuration,
-    )
+    try:
+        result = analyze_bytes(
+            data,
+            source,
+            configuration,
+        )
+    except RulesetError as error:
+        print(
+            "[ERROR] Could not load tradecraft rules: "
+            f"{error}"
+        )
+        return 4
 
     output_directory = Path(
         arguments.output
@@ -174,6 +197,10 @@ def main(
     print(
         "Indicators extracted: "
         f"{len(result.indicators)}"
+    )
+    print(
+        "Tradecraft findings: "
+        f"{len(result.findings)}"
     )
     print(
         "Output written to: "

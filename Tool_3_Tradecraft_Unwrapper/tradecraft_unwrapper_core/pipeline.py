@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Set, Tuple
+from pathlib import Path
+from typing import List, Optional, Set, Tuple
 
 from .detectors import detect_transforms
 from .indicators import extract_indicators
 from .models import AnalysisResult, Stage
+from .tradecraft import (
+    evaluate_tradecraft,
+    load_ruleset,
+)
 from .transforms import (
     bytes_to_text,
     printable_ratio,
@@ -22,6 +27,7 @@ class AnalyzerConfig:
     max_depth: int = 5
     max_output_bytes: int = 1_048_576
     min_printable_ratio: float = 0.60
+    rules_path: Optional[Path] = None
 
 
 def analyze_bytes(
@@ -185,10 +191,28 @@ def analyze_bytes(
                 )
             )
 
+    indicators = extract_indicators(stages)
+    ruleset = load_ruleset(config.rules_path)
+
+    findings = evaluate_tradecraft(
+        stages,
+        indicators,
+        ruleset,
+    )
+
+    ruleset_metadata = {
+        "ruleset_id": ruleset["ruleset_id"],
+        "name": ruleset["name"],
+        "version": ruleset["version"],
+        "source_path": ruleset["_source_path"],
+    }
+
     return AnalysisResult(
         source=source,
         root_sha256=root_hash,
         stages=stages,
-        indicators=extract_indicators(stages),
+        indicators=indicators,
+        findings=findings,
+        ruleset=ruleset_metadata,
         warnings=analysis_warnings,
     )

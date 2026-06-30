@@ -56,6 +56,27 @@ class Indicator:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class TradecraftFinding:
+    """An evidence-based tradecraft hypothesis."""
+
+    rule_id: str
+    title: str
+    description: str
+    severity: str
+    confidence: int
+    confidence_basis: str
+    stage_ids: List[int]
+    evidence: List[str]
+    attack_id: Optional[str] = None
+    attack_name: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a JSON-serializable representation."""
+
+        return asdict(self)
+
+
 @dataclass
 class AnalysisResult:
     """Complete analysis result for one input."""
@@ -64,6 +85,8 @@ class AnalysisResult:
     root_sha256: str
     stages: List[Stage]
     indicators: List[Indicator]
+    findings: List[TradecraftFinding] = field(default_factory=list)
+    ruleset: Dict[str, str] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -72,10 +95,18 @@ class AnalysisResult:
         return {
             "source": self.source,
             "root_sha256": self.root_sha256,
-            "stages": [stage.to_dict() for stage in self.stages],
+            "ruleset": dict(self.ruleset),
+            "stages": [
+                stage.to_dict()
+                for stage in self.stages
+            ],
             "indicators": [
                 indicator.to_dict()
                 for indicator in self.indicators
+            ],
+            "tradecraft_findings": [
+                finding.to_dict()
+                for finding in self.findings
             ],
             "warnings": list(self.warnings),
         }

@@ -30,6 +30,7 @@ def render_summary(result: AnalysisResult) -> str:
         f"Stages observed: {len(result.stages)}",
         f"Decoded stages: {max(0, len(result.stages) - 1)}",
         f"Indicators extracted: {len(result.indicators)}",
+        f"Tradecraft findings: {len(result.findings)}",
         "",
         "Transformation lineage:",
     ]
@@ -60,6 +61,47 @@ def render_summary(result: AnalysisResult) -> str:
                 f"stage={indicator.stage_id} "
                 f"{indicator.value}"
             )
+
+    if result.findings:
+        lines.extend(["", "Tradecraft findings:"])
+
+        for finding in result.findings:
+            attack = (
+                f"{finding.attack_id} "
+                f"{finding.attack_name}"
+                if finding.attack_id
+                else "No ATT&CK mapping"
+            )
+
+            lines.append(
+                f"  [{finding.severity.upper()}] "
+                f"{finding.rule_id}: "
+                f"{finding.title}"
+            )
+
+            lines.append(
+                f"    Confidence: "
+                f"{finding.confidence}"
+            )
+
+            lines.append(
+                f"    Confidence basis: "
+                f"{finding.confidence_basis}"
+            )
+
+            lines.append(
+                f"    ATT&CK hypothesis: {attack}"
+            )
+
+            lines.append(
+                f"    Description: "
+                f"{finding.description}"
+            )
+
+            for evidence in finding.evidence:
+                lines.append(
+                    f"    Evidence: {evidence}"
+                )
 
     warnings = list(result.warnings)
 
