@@ -34,7 +34,7 @@ python3 -m unittest discover -s tests -v
 Current expected result:
 
 ~~~text
-Ran 37 tests
+Ran 64 tests
 OK
 ~~~
 
@@ -52,7 +52,7 @@ The test suite verifies:
 - Gzip
 - Zlib
 - Bzip2
-- XZ/LZMA
+- XZ
 - Recursive processing
 - Maximum recursion depth
 - Maximum decoded output
@@ -82,8 +82,8 @@ python3 tradecraft_unwrapper.py \
 
 Expected:
 
-- One stage
-- Zero decoded stages
+- One unique stage
+- Zero derived stages
 - No transformation finding
 
 ### Nested Base64 and URL encoding
@@ -96,8 +96,8 @@ python3 tradecraft_unwrapper.py \
 
 Expected:
 
-- Three stages
-- Two decoded stages
+- Three unique stages
+- Two derived stages
 - Base64 followed by URL-percent decoding
 
 ### Base64 followed by gzip
@@ -110,7 +110,7 @@ python3 tradecraft_unwrapper.py \
 
 Expected:
 
-- Three stages
+- Three unique stages
 - Base64 followed by gzip
 - Final decoded text containing the safe training command
 
@@ -125,8 +125,8 @@ python3 tradecraft_unwrapper.py \
 Expected totals:
 
 ~~~text
-Stages observed: 2
-Decoded stages: 1
+Unique stages recorded: 2
+Derived stages: 1
 Indicators extracted: 2
 Tradecraft findings: 3
 ~~~

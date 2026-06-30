@@ -37,12 +37,21 @@ AI-generated suggestions were reviewed before acceptance.
 
 Corrections and refinements made during development included:
 
-- Correcting Bzip2 and XZ/LZMA end-of-stream handling
+- Correcting Bzip2 and XZ end-of-stream handling
 - Adding explicit decompression-output limits
 - Separating transformation confidence from finding confidence
 - Requiring a written confidence basis for every tradecraft rule
 - Correcting the `AnalysisResult` model to retain exact raw stage bytes
 - Adding regression tests after defects were identified
+- Adding maximum input-size, stage-count, per-stage output, and cumulative-output controls
+- Adding transformation preallocation checks and bounded XZ decompression memory
+- Preventing stale output artifacts from being mixed with a new analysis
+- Reporting trailing gzip, zlib, Bzip2, and XZ data
+- Correcting ambiguous Base64 and hexadecimal detection behavior
+- Preserving validated binary URL-safe Base64 decoding
+- Excluding Unicode replacement characters from printable-ratio calculations
+- Adding execution provenance and auditable duplicate-stage warnings
+- Correcting XZ terminology
 - Avoiding unsupported claims of malicious intent
 - Treating ATT&CK mappings as hypotheses rather than proof
 - Keeping all included samples synthetic and harmless
@@ -60,10 +69,15 @@ I manually:
 - Executed the documented samples
 - Validated generated JSON
 - Compared raw artifact hashes against recorded hashes
+- Validated execution provenance and active resource-limit metadata
+- Verified duplicate-stage suppression warnings
+- Verified conservative Base64 and hexadecimal behavior
+- Verified output-directory isolation
+- Verified trailing compressed-data warnings
 - Visually reviewed the HTML report
 - Confirmed that decoded content was not executed
 
-Version 1.0.0 includes 37 automated tests, all of which pass.
+Version 1.0.0 includes 64 automated tests, all of which pass.
 
 ## Understanding and Original Contribution
 
@@ -87,6 +101,8 @@ AI-generated suggestions can contain incorrect assumptions or defects.
 Examples encountered during development included:
 
 - Incorrect decompressor-state handling
+- An overly restrictive plausibility check that temporarily rejected valid URL-safe Base64 binary data
+- A stale automated-test expectation after command-line stage terminology changed
 - An incomplete data-model update
 - Shell-copying instructions that caused Markdown text to be interpreted as commands
 

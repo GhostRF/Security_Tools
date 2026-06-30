@@ -11,7 +11,7 @@ from .transforms import (
     decode_gzip_bytes,
     decode_hex_text,
     decode_html_entities,
-    decode_lzma_bytes,
+    decode_xz_bytes,
     decode_powershell_encoded_command,
     decode_url_percent,
     decode_zlib_bytes,
@@ -25,6 +25,7 @@ def detect_transforms(
     *,
     allow_text: bool = True,
     maximum_output_bytes: int = 1_048_576,
+    maximum_lzma_memory_bytes: int = 67_108_864,
 ) -> List[TransformCandidate]:
     """Identify safe decoding candidates for one stage."""
 
@@ -53,35 +54,54 @@ def detect_transforms(
         )
 
         candidates.extend(
-            decode_lzma_bytes(
+            decode_xz_bytes(
                 data,
                 maximum_output_bytes,
+                maximum_lzma_memory_bytes,
             )
         )
 
     if allow_text:
         candidates.extend(
-            decode_powershell_encoded_command(text)
+            decode_powershell_encoded_command(
+                text,
+                maximum_output_bytes,
+            )
         )
 
         candidates.extend(
-            decode_url_percent(text)
+            decode_url_percent(
+                text,
+                maximum_output_bytes,
+            )
         )
 
         candidates.extend(
-            decode_html_entities(text)
+            decode_html_entities(
+                text,
+                maximum_output_bytes,
+            )
         )
 
         candidates.extend(
-            reconstruct_string_concatenation(text)
+            reconstruct_string_concatenation(
+                text,
+                maximum_output_bytes,
+            )
         )
 
         candidates.extend(
-            decode_base64_text(text)
+            decode_base64_text(
+                text,
+                maximum_output_bytes,
+            )
         )
 
         candidates.extend(
-            decode_hex_text(text)
+            decode_hex_text(
+                text,
+                maximum_output_bytes,
+            )
         )
 
     results: List[TransformCandidate] = []

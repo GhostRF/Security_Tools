@@ -55,9 +55,36 @@ def render_summary(
         "Tradecraft Unwrapper Analysis",
         f"Source: {result.source}",
         f"Root SHA-256: {result.root_sha256}",
-        f"Stages observed: {len(result.stages)}",
         (
-            "Decoded stages: "
+            "Tool version: "
+            f"{result.provenance.get('tool_version', 'Unknown')}"
+        ),
+        (
+            "Generated UTC: "
+            f"{result.provenance.get('generated_at_utc', 'Unknown')}"
+        ),
+        (
+            "Python version: "
+            f"{result.provenance.get('python_version', 'Unknown')}"
+        ),
+        (
+            "Analysis mode: "
+            f"{result.provenance.get('analysis_mode', 'Unknown')}"
+        ),
+        (
+            "Lineage policy: "
+            f"{result.provenance.get('lineage_policy', 'Unknown')}"
+        ),
+        (
+            "Configured limits: "
+            + json.dumps(
+                result.provenance.get("limits", {}),
+                sort_keys=True,
+            )
+        ),
+        f"Unique stages recorded: {len(result.stages)}",
+        (
+            "Derived stages: "
             f"{max(0, len(result.stages) - 1)}"
         ),
         (
@@ -69,7 +96,8 @@ def render_summary(
             f"{len(result.findings)}"
         ),
         "",
-        "Transformation lineage:",
+        "Recorded stage lineage "
+        "(duplicate SHA-256 outputs suppressed):",
     ]
 
     for stage in result.stages:
@@ -319,6 +347,39 @@ def render_html(
         "Unknown",
     )
 
+    tool_version = result.provenance.get(
+        "tool_version",
+        "Unknown",
+    )
+
+    generated_at_utc = result.provenance.get(
+        "generated_at_utc",
+        "Unknown",
+    )
+
+    python_version = result.provenance.get(
+        "python_version",
+        "Unknown",
+    )
+
+    analysis_mode = result.provenance.get(
+        "analysis_mode",
+        "Unknown",
+    )
+
+    lineage_policy = result.provenance.get(
+        "lineage_policy",
+        "Unknown",
+    )
+
+    limits_json = escape(
+        json.dumps(
+            result.provenance.get("limits", {}),
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -428,15 +489,39 @@ def render_html(
       {escape(ruleset_name)}
       v{escape(ruleset_version)}
     </p>
+    <p>
+      <strong>Tool version:</strong>
+      {escape(str(tool_version))}
+    </p>
+    <p>
+      <strong>Generated UTC:</strong>
+      {escape(str(generated_at_utc))}
+    </p>
+    <p>
+      <strong>Python version:</strong>
+      {escape(str(python_version))}
+    </p>
+    <p>
+      <strong>Analysis mode:</strong>
+      {escape(str(analysis_mode))}
+    </p>
+    <p>
+      <strong>Lineage policy:</strong>
+      {escape(str(lineage_policy))}
+    </p>
+    <details>
+      <summary>Configured analysis limits</summary>
+      <pre>{limits_json}</pre>
+    </details>
   </section>
 
   <section class="summary">
     <div class="metric">
-      <strong>Stages</strong><br>
+      <strong>Unique stages</strong><br>
       {len(result.stages)}
     </div>
     <div class="metric">
-      <strong>Decoded stages</strong><br>
+      <strong>Derived stages</strong><br>
       {max(0, len(result.stages) - 1)}
     </div>
     <div class="metric">
@@ -449,7 +534,7 @@ def render_html(
     </div>
   </section>
 
-  <h2>Transformation stages</h2>
+  <h2>Recorded stage lineage</h2>
   {stage_sections}
 
   <h2>Indicators</h2>
@@ -479,15 +564,58 @@ def render_html(
 """
 
 
+def _prepare_output_directory(
+    output_directory: Path,
+) -> None:
+    """Require a new or empty output directory.
+
+    A repository placeholder named .gitkeep is permitted.
+    Existing reports or stage artifacts are never silently
+    overwritten because they may belong to an earlier analysis.
+    """
+
+    if output_directory.exists():
+        if not output_directory.is_dir():
+            raise OSError(
+                "The output path exists but is not a "
+                f"directory: {output_directory}"
+            )
+
+        existing_entries = sorted(
+            entry.name
+            for entry in output_directory.iterdir()
+            if entry.name != ".gitkeep"
+        )
+
+        if existing_entries:
+            preview = ", ".join(
+                existing_entries[:5]
+            )
+
+            if len(existing_entries) > 5:
+                preview += ", ..."
+
+            raise OSError(
+                "The output directory is not empty. "
+                "Choose a new directory or remove the "
+                "previous analysis artifacts first. "
+                f"Existing entries: {preview}"
+            )
+    else:
+        output_directory.mkdir(
+            parents=True,
+            exist_ok=False,
+        )
+
+
 def write_reports(
     result: AnalysisResult,
     output_directory: Path,
 ) -> None:
     """Write reports, text previews, and exact raw stage bytes."""
 
-    output_directory.mkdir(
-        parents=True,
-        exist_ok=True,
+    _prepare_output_directory(
+        output_directory
     )
 
     stages_directory = (

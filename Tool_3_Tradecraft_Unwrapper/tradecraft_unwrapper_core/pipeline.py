@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
+import platform
+from typing import Dict, List, Optional, Tuple
 
+from . import __version__
 from .detectors import detect_transforms
 from .indicators import extract_indicators
 from .models import AnalysisResult, Stage
@@ -20,12 +23,20 @@ from .transforms import (
 )
 
 
+class AnalysisLimitError(ValueError):
+    """Raised when an analysis resource limit is exceeded."""
+
+
 @dataclass(frozen=True)
 class AnalyzerConfig:
     """Safety and processing limits for recursive analysis."""
 
     max_depth: int = 5
     max_output_bytes: int = 1_048_576
+    max_input_bytes: int = 10_485_760
+    max_stages: int = 100
+    max_total_output_bytes: int = 10_485_760
+    max_xz_memory_bytes: int = 67_108_864
     min_printable_ratio: float = 0.60
     rules_path: Optional[Path] = None
 
@@ -36,6 +47,13 @@ def analyze_bytes(
     config: AnalyzerConfig,
 ) -> AnalysisResult:
     """Analyze bytes recursively without executing content."""
+
+    if len(data) > config.max_input_bytes:
+        raise AnalysisLimitError(
+            f"Input contained {len(data)} bytes, which "
+            "exceeded the configured maximum input size "
+            f"of {config.max_input_bytes} bytes."
+        )
 
     root_text, root_encoding, root_warnings = (
         bytes_to_text(data)
@@ -71,13 +89,15 @@ def analyze_bytes(
         (root_stage, data)
     ]
 
-    observed_hashes: Set[str] = {
-        root_hash
+    observed_hashes: Dict[str, int] = {
+        root_hash: root_stage.stage_id
     }
 
     analysis_warnings: List[str] = []
+    total_decoded_bytes = 0
+    stage_limit_reached = False
 
-    while processing_queue:
+    while processing_queue and not stage_limit_reached:
         parent, parent_data = (
             processing_queue.pop(0)
         )
@@ -102,6 +122,9 @@ def analyze_bytes(
             maximum_output_bytes=(
                 config.max_output_bytes
             ),
+            maximum_lzma_memory_bytes=(
+                config.max_xz_memory_bytes
+            ),
         )
 
         for candidate in candidates:
@@ -112,6 +135,16 @@ def analyze_bytes(
                     for warning in candidate.warnings
                 )
                 continue
+
+            if len(stages) >= config.max_stages:
+                analysis_warnings.append(
+                    "Stopped recursive processing because "
+                    "the configured maximum stage count of "
+                    f"{config.max_stages} was reached."
+                )
+                stage_limit_reached = True
+                processing_queue.clear()
+                break
 
             decoded_size = len(
                 candidate.decoded
@@ -131,11 +164,42 @@ def analyze_bytes(
                 )
                 continue
 
+            projected_total = (
+                total_decoded_bytes
+                + decoded_size
+            )
+
+            if (
+                projected_total
+                > config.max_total_output_bytes
+            ):
+                analysis_warnings.append(
+                    f"Skipped {candidate.transform} "
+                    f"output from stage "
+                    f"{parent.stage_id}: adding "
+                    f"{decoded_size} bytes would exceed "
+                    "the configured cumulative decoded "
+                    "output limit of "
+                    f"{config.max_total_output_bytes} bytes."
+                )
+                continue
+
             output_hash = sha256_hex(
                 candidate.decoded
             )
 
-            if output_hash in observed_hashes:
+            existing_stage_id = observed_hashes.get(
+                output_hash
+            )
+
+            if existing_stage_id is not None:
+                analysis_warnings.append(
+                    f"Skipped duplicate "
+                    f"{candidate.transform} output from "
+                    f"stage {parent.stage_id}: SHA-256 "
+                    f"{output_hash} is already represented "
+                    f"by stage {existing_stage_id}."
+                )
                 continue
 
             (
@@ -185,10 +249,14 @@ def analyze_bytes(
                 )
 
             stages.append(child_stage)
+            total_decoded_bytes += decoded_size
+
             stage_bytes[
                 child_stage.stage_id
             ] = candidate.decoded
-            observed_hashes.add(output_hash)
+            observed_hashes[
+                output_hash
+            ] = child_stage.stage_id
 
             processing_queue.append(
                 (
@@ -213,6 +281,38 @@ def analyze_bytes(
         "source_path": ruleset["_source_path"],
     }
 
+    provenance = {
+        "tool_name": "Tradecraft Unwrapper",
+        "tool_version": __version__,
+        "generated_at_utc": (
+            datetime.now(timezone.utc)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+        ),
+        "python_version": platform.python_version(),
+        "analysis_mode": "static-non-executing",
+        "lineage_policy": (
+            "unique-output-sha256-deduplication"
+        ),
+        "limits": {
+            "max_depth": config.max_depth,
+            "max_stage_output_bytes": (
+                config.max_output_bytes
+            ),
+            "max_input_bytes": config.max_input_bytes,
+            "max_stages": config.max_stages,
+            "max_total_decoded_bytes": (
+                config.max_total_output_bytes
+            ),
+            "max_xz_memory_bytes": (
+                config.max_xz_memory_bytes
+            ),
+            "min_printable_ratio": (
+                config.min_printable_ratio
+            ),
+        },
+    }
+
     return AnalysisResult(
         source=source,
         root_sha256=root_hash,
@@ -220,6 +320,7 @@ def analyze_bytes(
         indicators=indicators,
         findings=findings,
         ruleset=ruleset_metadata,
+        provenance=provenance,
         stage_bytes=stage_bytes,
         warnings=analysis_warnings,
     )
