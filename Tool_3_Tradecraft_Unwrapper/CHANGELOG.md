@@ -2,12 +2,19 @@
 
 ## Unreleased
 
-- Added complete reproducibility documentation
-- Added architecture documentation
-- Added safety documentation
-- Added testing procedures
-- Added AI-use disclosure
-- Added automated GitHub Actions preparation
+- No unreleased changes
+
+## 1.0.0 - 2026-06-29
+
+- Promoted Tradecraft Unwrapper to its initial stable release
+- Completed reproducibility and usage documentation
+- Completed architecture and safety documentation
+- Completed testing procedures and AI-use disclosure
+- Added GitHub Actions validation for Python 3.10, 3.11, 3.12, and 3.13
+- Added a release-version regression test
+- Confirmed 37 automated tests pass
+- Confirmed exact raw-stage artifact hashes
+- Confirmed JSON, text, and safely escaped HTML reporting
 
 ## 0.1.0 - 2026-06-29
 

@@ -197,7 +197,7 @@ Malformed or excessive compressed content produces visible warnings rather than 
 
 ## Dependency Decision
 
-Version 0.1.0 uses only the Python standard library.
+Version 1.0.0 uses only the Python standard library.
 
 Python 3.10 or newer is required because the implementation uses modern Python type-annotation syntax.
 

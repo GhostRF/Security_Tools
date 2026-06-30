@@ -63,7 +63,7 @@ I manually:
 - Visually reviewed the HTML report
 - Confirmed that decoded content was not executed
 
-At the current development milestone, all 36 automated tests pass.
+Version 1.0.0 includes 37 automated tests, all of which pass.
 
 ## Understanding and Original Contribution
 
