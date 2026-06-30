@@ -87,6 +87,15 @@ class AnalysisResult:
     indicators: List[Indicator]
     findings: List[TradecraftFinding] = field(default_factory=list)
     ruleset: Dict[str, str] = field(default_factory=dict)
+
+    # Retained internally so exact stage artifacts can be exported.
+    # This field is intentionally omitted from to_dict() because bytes
+    # are not directly JSON serializable.
+    stage_bytes: Dict[int, bytes] = field(
+        default_factory=dict,
+        repr=False,
+    )
+
     warnings: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:

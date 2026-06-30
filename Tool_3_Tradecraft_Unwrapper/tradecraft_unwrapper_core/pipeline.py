@@ -61,6 +61,9 @@ def analyze_bytes(
     )
 
     stages: List[Stage] = [root_stage]
+    stage_bytes = {
+        root_stage.stage_id: data,
+    }
 
     processing_queue: List[
         Tuple[Stage, bytes]
@@ -182,6 +185,9 @@ def analyze_bytes(
                 )
 
             stages.append(child_stage)
+            stage_bytes[
+                child_stage.stage_id
+            ] = candidate.decoded
             observed_hashes.add(output_hash)
 
             processing_queue.append(
@@ -214,5 +220,6 @@ def analyze_bytes(
         indicators=indicators,
         findings=findings,
         ruleset=ruleset_metadata,
+        stage_bytes=stage_bytes,
         warnings=analysis_warnings,
     )
