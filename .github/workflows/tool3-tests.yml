@@ -1,0 +1,70 @@
+name: Tool 3 Tests
+
+on:
+  push:
+    paths:
+      - "Tool_3_Tradecraft_Unwrapper/**"
+      - ".github/workflows/tool3-tests.yml"
+  pull_request:
+    paths:
+      - "Tool_3_Tradecraft_Unwrapper/**"
+      - ".github/workflows/tool3-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+
+    defaults:
+      run:
+        working-directory: Tool_3_Tradecraft_Unwrapper
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile source
+        run: |
+          python -m py_compile \
+            tradecraft_unwrapper.py \
+            tradecraft_unwrapper_core/*.py \
+            tests/*.py
+
+      - name: Run automated tests
+        run: |
+          python -m unittest discover -s tests -v
+
+      - name: Run reproducible sample
+        run: |
+          rm -rf output/ci-tradecraft
+
+          python tradecraft_unwrapper.py \
+            samples/tradecraft_findings.txt \
+            -o output/ci-tradecraft
+
+      - name: Validate generated reports
+        run: |
+          python -m json.tool \
+            output/ci-tradecraft/analysis.json \
+            > /dev/null
+
+          test -f output/ci-tradecraft/summary.txt
+          test -f output/ci-tradecraft/report.html
+          test -f output/ci-tradecraft/stages/stage_00_input.bin
+          test -f output/ci-tradecraft/stages/stage_01_powershell-encoded-command.bin

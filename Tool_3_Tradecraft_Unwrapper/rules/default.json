@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "ruleset_id": "default-conservative",
+  "name": "Default Conservative Tradecraft Rules",
+  "version": "1.0",
+  "description": "Evidence-based hypotheses for safely analyzed scripts and command lines. Findings do not independently establish malicious intent.",
+  "rules": [
+    {
+      "rule_id": "TC-001",
+      "title": "Encoded or compressed content observed",
+      "description": "One or more non-input transformations were reconstructed. Encoding or compression can be legitimate, so this finding should be treated as an analytic hypothesis.",
+      "severity": "low",
+      "confidence": 70,
+      "confidence_basis": "The transformation was directly reconstructed, but encoding and compression are broad behaviors with many legitimate uses.",
+      "attack_id": "T1027",
+      "attack_name": "Obfuscated Files or Information",
+      "match": {
+        "type": "transform",
+        "values": [
+          "base64",
+          "base64-url",
+          "hex",
+          "url-percent",
+          "html-entity",
+          "string-concatenation",
+          "gzip",
+          "zlib",
+          "bzip2",
+          "lzma-xz",
+          "powershell-encoded-command"
+        ]
+      }
+    },
+    {
+      "rule_id": "TC-002",
+      "title": "PowerShell interpreter observed",
+      "description": "The analyzed content referenced PowerShell or pwsh. This may represent normal administration or command and scripting interpreter activity.",
+      "severity": "medium",
+      "confidence": 90,
+      "confidence_basis": "An exact normalized PowerShell or pwsh command indicator was directly observed in an analyzed stage.",
+      "attack_id": "T1059.001",
+      "attack_name": "Command and Scripting Interpreter: PowerShell",
+      "match": {
+        "type": "indicator",
+        "kind": "command",
+        "values": [
+          "powershell",
+          "powershell.exe",
+          "pwsh",
+          "pwsh.exe"
+        ]
+      }
+    },
+    {
+      "rule_id": "TC-003",
+      "title": "Windows command shell observed",
+      "description": "The analyzed content referenced cmd or cmd.exe. This may represent normal administration or Windows command-shell activity.",
+      "severity": "medium",
+      "confidence": 90,
+      "confidence_basis": "An exact normalized cmd or cmd.exe command indicator was directly observed in an analyzed stage.",
+      "attack_id": "T1059.003",
+      "attack_name": "Command and Scripting Interpreter: Windows Command Shell",
+      "match": {
+        "type": "indicator",
+        "kind": "command",
+        "values": [
+          "cmd",
+          "cmd.exe"
+        ]
+      }
+    },
+    {
+      "rule_id": "TC-004",
+      "title": "Mshta utility observed",
+      "description": "The analyzed content referenced mshta. Its presence supports a possible system-binary proxy-execution hypothesis but does not establish malicious use.",
+      "severity": "medium",
+      "confidence": 85,
+      "confidence_basis": "An exact mshta command indicator was directly observed, but mshta is a dual-use system utility and intent cannot be determined statically.",
+      "attack_id": "T1218.005",
+      "attack_name": "System Binary Proxy Execution: Mshta",
+      "match": {
+        "type": "indicator",
+        "kind": "command",
+        "values": [
+          "mshta",
+          "mshta.exe"
+        ]
+      }
+    },
+    {
+      "rule_id": "TC-005",
+      "title": "Regsvr32 utility observed",
+      "description": "The analyzed content referenced regsvr32. Its presence supports a possible system-binary proxy-execution hypothesis but does not establish malicious use.",
+      "severity": "medium",
+      "confidence": 85,
+      "confidence_basis": "An exact regsvr32 command indicator was directly observed, but regsvr32 is a dual-use system utility and intent cannot be determined statically.",
+      "attack_id": "T1218.010",
+      "attack_name": "System Binary Proxy Execution: Regsvr32",
+      "match": {
+        "type": "indicator",
+        "kind": "command",
+        "values": [
+          "regsvr32",
+          "regsvr32.exe"
+        ]
+      }
+    },
+    {
+      "rule_id": "TC-006",
+      "title": "Rundll32 utility observed",
+      "description": "The analyzed content referenced rundll32. Its presence supports a possible system-binary proxy-execution hypothesis but does not establish malicious use.",
+      "severity": "medium",
+      "confidence": 85,
+      "confidence_basis": "An exact rundll32 command indicator was directly observed, but rundll32 is a dual-use system utility and intent cannot be determined statically.",
+      "attack_id": "T1218.011",
+      "attack_name": "System Binary Proxy Execution: Rundll32",
+      "match": {
+        "type": "indicator",
+        "kind": "command",
+        "values": [
+          "rundll32",
+          "rundll32.exe"
+        ]
+      }
+    }
+  ]
+}
