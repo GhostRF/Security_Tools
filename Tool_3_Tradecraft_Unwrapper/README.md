@@ -230,6 +230,10 @@ python3 tradecraft_unwrapper.py \
 | `--rules` | Select an external JSON tradecraft rule file |
 | `--max-depth` | Set the maximum recursive transformation depth |
 | `--max-bytes` | Set the maximum output accepted from one decoded stage |
+| `--max-input-bytes` | Set the maximum input-file or literal-text size |
+| `--max-stages` | Set the maximum number of recorded stages, including the original input |
+| `--max-total-bytes` | Set the maximum cumulative decoded output size |
+| `--max-xz-memory-bytes` | Set the maximum memory allowed for XZ decompression |
 | `--min-printable-ratio` | Set the printable-character threshold for text-oriented decoders |
 | `--version` | Display the application version |
 | `--help` | Display command help |
@@ -525,12 +529,12 @@ Run the complete automated test suite:
 python3 -m unittest discover -s tests -v
 ~~~
 
-The current suite contains 64 tests.
+The current suite contains 65 tests.
 
 Expected conclusion:
 
 ~~~text
-Ran 64 tests
+Ran 65 tests
 OK
 ~~~
 
@@ -611,6 +615,7 @@ See [`docs/DESIGN_NOTES.md`](docs/DESIGN_NOTES.md) for the full architecture des
 | 2 | Invalid command-line arguments or missing input file |
 | 3 | Input-read or report-write failure |
 | 4 | Invalid or unreadable tradecraft rule file |
+| 5 | Configured resource limit exceeded |
 
 Malformed transformations may produce warnings without terminating the entire analysis.
 

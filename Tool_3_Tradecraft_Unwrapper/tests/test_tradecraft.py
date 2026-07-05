@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import lzma
 import sys
 import tempfile
 import unittest
@@ -314,6 +315,38 @@ class TradecraftRuleTests(unittest.TestCase):
                 "confidence_basis",
             ):
                 load_ruleset(rules_path)
+
+    def test_xz_maps_to_t1027(self) -> None:
+        compressed = lzma.compress(
+            b'Write-Output "XZ sample"',
+            format=lzma.FORMAT_XZ,
+        )
+
+        result = analyze_bytes(
+            compressed,
+            "test-input",
+            self.configuration,
+        )
+
+        transforms = {
+            stage.transform
+            for stage in result.stages
+        }
+
+        attack_ids = {
+            finding.attack_id
+            for finding in result.findings
+        }
+
+        self.assertIn(
+            "xz",
+            transforms,
+        )
+
+        self.assertIn(
+            "T1027",
+            attack_ids,
+        )
 
 
 if __name__ == "__main__":

@@ -196,6 +196,7 @@ Each HTML stage section links to its raw-byte artifact and text preview.
 - Input-read and report-write failures return exit code 3.
 - A nonempty output directory is treated as a report-write failure and is not silently overwritten.
 - Invalid tradecraft rules return exit code 4.
+- Resource-limit failures return exit code 5.
 - Successful analysis returns exit code 0.
 
 Malformed or excessive compressed content produces visible warnings rather than being executed or silently ignored.
