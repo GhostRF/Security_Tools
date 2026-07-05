@@ -77,7 +77,7 @@ I manually:
 - Visually reviewed the HTML report
 - Confirmed that decoded content was not executed
 
-Version 1.0.0 includes 64 automated tests, all of which pass.
+Version 1.0.0 includes 65 automated tests, all of which pass.
 
 ## Understanding and Original Contribution
 

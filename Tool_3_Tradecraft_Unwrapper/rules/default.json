@@ -26,6 +26,7 @@
           "gzip",
           "zlib",
           "bzip2",
+          "xz",
           "lzma-xz",
           "powershell-encoded-command"
         ]

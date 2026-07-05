@@ -24,7 +24,9 @@
 - Added synthetic validation samples
 - Completed reproducibility, architecture, safety, testing, confidence-model, and AI-use documentation
 - Added GitHub Actions validation for Python 3.10, 3.11, 3.12, and 3.13
-- Confirmed all 64 automated tests pass
+- Corrected XZ default-rule transform mapping
+- Added XZ ATT&CK-mapping regression coverage
+- Confirmed all 65 automated tests pass
 - Confirmed raw-stage artifact hashes match the recorded SHA-256 values
 
 ## 0.1.0 - 2026-06-29
