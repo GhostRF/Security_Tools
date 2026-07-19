@@ -177,3 +177,25 @@ Verify:
 - ATT&CK hypothesis
 - Raw-byte links
 - Text-preview links
+
+## Version 1.1.0 Validation
+
+Version 1.1.0 validation includes the existing regression suite plus new tests for embedded-fragment scanning and simple-mode CLI behavior.
+
+Expected validation command:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+Expected result:
+
+```text
+Ran 71 tests
+
+OK
+```
+
+The embedded-fragment tests verify that Base64 and hexadecimal fragments inside longer text are reported as candidates and that benign text does not create candidates.
+
+The simple-mode CLI test verifies that `--simple` prints decoded stage text for literal input while preserving normal report-generation behavior when an output directory is supplied.

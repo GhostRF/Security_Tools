@@ -47,7 +47,7 @@ class ProvenanceAndLineageTests(unittest.TestCase):
         )
         self.assertEqual(
             provenance["tool_version"],
-            "1.0.0",
+            "1.1.0",
         )
         self.assertEqual(
             provenance["analysis_mode"],
@@ -92,10 +92,10 @@ class ProvenanceAndLineageTests(unittest.TestCase):
         )
         self.assertEqual(
             serialized["provenance"]["tool_version"],
-            "1.0.0",
+            "1.1.0",
         )
         self.assertIn(
-            "Tool version: 1.0.0",
+            "Tool version: 1.1.0",
             summary,
         )
         self.assertIn(
