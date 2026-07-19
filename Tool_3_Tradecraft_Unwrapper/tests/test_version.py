@@ -19,7 +19,7 @@ class VersionTests(unittest.TestCase):
     def test_release_version(self) -> None:
         self.assertEqual(
             __version__,
-            "1.0.0",
+            "1.1.0",
         )
 
         completed = subprocess.run(
@@ -44,7 +44,7 @@ class VersionTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "1.0.0",
+            "1.1.0",
             completed.stdout,
         )
 

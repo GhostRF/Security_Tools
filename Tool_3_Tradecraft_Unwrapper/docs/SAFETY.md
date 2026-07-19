@@ -93,3 +93,9 @@ All tradecraft findings are hypotheses requiring analyst review and contextual e
 ## Authorized Use
 
 Use Tradecraft Unwrapper only with files, commands, systems, and data that you are legally and organizationally authorized to analyze.
+
+## Version 1.1.0 Embedded Fragment Safety
+
+The embedded-fragment scan is opt-in. It is designed to surface analyst-review candidates, not final malicious verdicts.
+
+Safety controls for embedded candidates include strict decoding, printable-output checks, confidence labeling, decoded-size reporting, and evidence text. Analysts should treat the output as triage evidence that requires review.

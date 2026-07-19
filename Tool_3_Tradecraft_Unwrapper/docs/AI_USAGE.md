@@ -107,3 +107,9 @@ Examples encountered during development included:
 - Shell-copying instructions that caused Markdown text to be interpreted as commands
 
 Automated testing, source review, and manual validation were required to identify and correct these issues.
+
+## Version 1.1.0 AI-Assisted Refinement
+
+AI assistance was used to help evaluate peer feedback, plan the Version 1.1.0 refinement scope, draft implementation steps, design validation tests, and update documentation language.
+
+The author executed the commands, reviewed the code changes, validated the test results, and retained responsibility for the final submitted tool.

@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from typing import Optional, Sequence
 
 from . import __version__
+from .embedded import (
+    embedded_candidates_to_dicts,
+    scan_embedded_fragments,
+)
 from .pipeline import (
     AnalysisLimitError,
     AnalyzerConfig,
@@ -49,6 +54,24 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Path to an external JSON tradecraft rule set. "
             "The bundled default rules are used when omitted."
+        ),
+    )
+
+    parser.add_argument(
+        "--simple",
+        action="store_true",
+        help=(
+            "Print decoded derived stage text directly to the terminal "
+            "while still writing the full analysis reports."
+        ),
+    )
+
+    parser.add_argument(
+        "--scan-embedded",
+        action="store_true",
+        help=(
+            "Also scan the original input for likely embedded Base64 or "
+            "hexadecimal fragments and write embedded_fragments reports."
         ),
     )
 
@@ -126,6 +149,99 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     return parser
+
+
+def _print_simple_stage_output(output_directory: Path) -> None:
+    """Print derived stage text artifacts in a compact CLI-friendly format."""
+
+    stages_directory = output_directory / "stages"
+    stage_paths = sorted(stages_directory.glob("stage_*.txt"))
+
+    derived_stage_paths = [
+        stage_path
+        for stage_path in stage_paths
+        if not stage_path.name.startswith("stage_00_")
+    ]
+
+    print()
+    print("Simple decoded output:")
+    print("======================")
+
+    if not derived_stage_paths:
+        print("No decoded derived stage text was produced.")
+        return
+
+    for index, stage_path in enumerate(derived_stage_paths, start=1):
+        stage_text = stage_path.read_text(
+            encoding="utf-8",
+            errors="replace",
+        ).strip()
+
+        if not stage_text:
+            continue
+
+        if len(derived_stage_paths) > 1:
+            print()
+            print(f"[Decoded stage {index}: {stage_path.name}]")
+
+        print(stage_text)
+
+
+def _write_embedded_fragment_reports(
+    input_data: bytes,
+    output_directory: Path,
+    maximum_output_bytes: int,
+) -> int:
+    """Write optional embedded-fragment reports for the original input."""
+
+    decoded_text = input_data.decode("utf-8", errors="replace")
+    candidates = scan_embedded_fragments(
+        decoded_text,
+        maximum_output_bytes=maximum_output_bytes,
+    )
+    candidate_dicts = embedded_candidates_to_dicts(candidates)
+
+    json_payload = {
+        "count": len(candidate_dicts),
+        "candidates": candidate_dicts,
+    }
+
+    json_path = output_directory / "embedded_fragments.json"
+    text_path = output_directory / "embedded_fragments.txt"
+
+    json_path.write_text(
+        json.dumps(json_payload, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    lines = [
+        "Embedded Fragment Candidates",
+        "============================",
+        "",
+        f"Count: {len(candidate_dicts)}",
+        "",
+    ]
+
+    if not candidates:
+        lines.append("No likely embedded Base64 or hexadecimal fragments found.")
+    else:
+        for index, candidate in enumerate(candidates, start=1):
+            lines.extend(
+                [
+                    f"Candidate {index}",
+                    f"  Type: {candidate.kind}",
+                    f"  Offset: {candidate.start}-{candidate.end}",
+                    f"  Confidence: {candidate.confidence}",
+                    f"  Decoded size: {candidate.decoded_size}",
+                    f"  Evidence: {candidate.evidence}",
+                    "  Decoded preview:",
+                    f"    {candidate.decoded_preview}",
+                    "",
+                ]
+            )
+
+    text_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return len(candidate_dicts)
 
 
 def main(
@@ -288,6 +404,21 @@ def main(
         )
         return 3
 
+    embedded_fragment_count = None
+    if arguments.scan_embedded:
+        try:
+            embedded_fragment_count = _write_embedded_fragment_reports(
+                data,
+                output_directory,
+                arguments.max_bytes,
+            )
+        except OSError as error:
+            print(
+                "[ERROR] Could not write embedded-fragment reports: "
+                f"{error}"
+            )
+            return 3
+
     print(
         f"Tradecraft Unwrapper v{__version__}"
     )
@@ -307,6 +438,12 @@ def main(
         "Tradecraft findings: "
         f"{len(result.findings)}"
     )
+    if arguments.simple:
+        _print_simple_stage_output(output_directory)
+
+    if embedded_fragment_count is not None:
+        print(f"Embedded fragments reported: {embedded_fragment_count}")
+
     print(
         "Output written to: "
         f"{output_directory.resolve()}"

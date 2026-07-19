@@ -220,3 +220,11 @@ Tradecraft Unwrapper intentionally does not:
 - Evaluate arbitrary expressions
 - Decrypt unknown encryption
 - Claim that ATT&CK hypotheses prove malicious activity
+
+## Version 1.1.0 Design Notes
+
+Version 1.1.0 adds an opt-in embedded-fragment scan rather than changing the default recursive pipeline. This preserves the original conservative whole-stage behavior while giving analysts a way to inspect likely Base64 or hexadecimal fragments that appear inside longer script or command text.
+
+Embedded-fragment results are intentionally labeled as candidates. Each candidate includes the fragment type, byte offset, confidence score, decoded size, evidence text, and decoded preview. The tool does not automatically convert an embedded candidate into a malicious conclusion.
+
+The simple-mode CLI path was added for quick triage. It is intended for analysts who want an immediate decoded result from literal text without first opening the full report set. Normal JSON, text, HTML, and raw-stage outputs remain available for auditability.

@@ -4,6 +4,13 @@
 
 - No unreleased changes
 
+## 1.1.0 - 2026-07-19
+
+- Added optional embedded Base64 and hexadecimal fragment scanning with `--scan-embedded`.
+- Added simple text-oriented CLI output with `--simple` for quick one-off decoding.
+- Added automated tests for embedded fragment detection and simple-mode CLI behavior.
+- Updated documentation to explain the feedback-driven changes, validation approach, and safety limits.
+
 ## 1.0.0 - 2026-06-29
 
 - Promoted Tradecraft Unwrapper to its initial stable release
