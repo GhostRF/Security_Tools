@@ -1,0 +1,2 @@
+The mobile app may request access to location data, contacts, photos, cookies, and device identifiers.
+These permissions support personalization, analytics, and targeted advertising.
