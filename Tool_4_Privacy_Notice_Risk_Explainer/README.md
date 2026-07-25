@@ -4,8 +4,6 @@
 
 Privacy Notice Risk Explainer is a local, rule-based tool that reviews privacy notices, consent statements, application permission disclosures, and data-use language. It highlights privacy and trust concerns in plain language so users, analysts, or reviewers can better understand what a notice may imply.
 
-This tool supports the Tool 4 theme: Human, Privacy, & Trust-Centered Security.
-
 ## What Problem This Solves
 
 Privacy notices are often difficult for users to understand. Important details about data collection, sharing, retention, advertising, profiling, and sensitive data may be buried in broad or vague language.
