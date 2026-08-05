@@ -8,15 +8,23 @@ Privacy Notice Risk Explainer is a local, rule-based tool that reviews privacy n
 
 Privacy notices are often difficult for users to understand. Important details about data collection, sharing, retention, advertising, profiling, and sensitive data may be buried in broad or vague language.
 
-This tool helps by converting privacy notice language into a structured report with:
+The tool converts privacy notice language into a structured report with risk level, risk score, plain-language findings, evidence snippets, suggested improvements, readability indicators, and JSON, text, HTML, and CSV reports.
 
-- Risk level
-- Risk score
-- Plain-language findings
-- Evidence snippets
-- Suggested improvements
-- Readability indicators
-- JSON, text, HTML, and CSV reports
+## Refinement Summary
+
+Version 1.1.0 adds refinements based on peer feedback:
+
+- Improved repository discoverability from the root README.
+- Added more indirect and vague privacy-language rules.
+- Added optional custom JSON rule loading with --rules.
+- Added tests for indirect-language detection and custom-rule loading.
+- Preserved the original offline, no-third-party-package design.
+
+## Why This Version Does Not Add a Cloud LLM
+
+Several reviewers suggested adding AI, LLM support, or a learning-based component. That is a valid future direction, especially for identifying unusual legal wording. For this version, the tool remains offline and rule-based because privacy notices may contain sensitive user or organizational information. Sending those notices to a third-party model would create a privacy concern inside a privacy-review tool.
+
+Instead, this refinement keeps the safe local design and makes the rule system easier to extend.
 
 ## Safety and Scope
 
@@ -32,93 +40,59 @@ No third-party Python packages are required.
 
 Run against a sample low-risk notice:
 
-```bash
 python3 privacy_notice_risk_explainer.py samples/low_risk_notice.txt -o output/low-risk
-```
 
 Run against a high-risk notice:
 
-```bash
 python3 privacy_notice_risk_explainer.py samples/high_risk_notice.txt -o output/high-risk
-```
 
 Run against an ambiguous notice:
 
-```bash
 python3 privacy_notice_risk_explainer.py samples/ambiguous_notice.txt -o output/ambiguous
-```
 
-Run against an app-permissions notice:
+Run against indirect or vague privacy language:
 
-```bash
-python3 privacy_notice_risk_explainer.py samples/app_permissions_notice.txt -o output/app-permissions
-```
-
-Write only JSON output:
-
-```bash
-python3 privacy_notice_risk_explainer.py samples/high_risk_notice.txt -f json -o output/json-only
-```
+python3 privacy_notice_risk_explainer.py samples/indirect_language_notice.txt -o output/indirect-language
 
 Show the version:
 
-```bash
 python3 privacy_notice_risk_explainer.py --version
-```
+
+## Custom Rule Files
+
+Version 1.1.0 supports optional custom JSON rules.
+
+Example:
+
+python3 privacy_notice_risk_explainer.py samples/custom_rule_notice.txt --rules samples/custom_rules.json -o output/custom-rule
+
+Custom rules must include rule_id, title, severity, category, patterns, explanation, and recommendation.
+
+Supported severity values are low, medium, high, and critical.
 
 ## Output Files
 
 By default, the tool writes:
 
-- `analysis.json`
-- `summary.txt`
-- `report.html`
-- `findings.csv`
-
-## Example Output
-
-```text
-Privacy Notice Risk Explainer v1.0.0
-Source: samples/high_risk_notice.txt
-Risk level: CRITICAL
-Risk score: 38
-Findings: 10
-Readability: Difficult (grade 14.3)
-
-Top findings:
-- [HIGH] Precise location or geolocation collection
-- [CRITICAL] Biometric information collection
-- [HIGH] Contacts, photos, or device-content access
-- [MEDIUM] Device identifiers or tracking identifiers
-- [HIGH] Third-party sharing
-```
+- analysis.json
+- summary.txt
+- report.html
+- findings.csv
 
 ## Testing
 
 Run the full test suite:
 
-```bash
 python3 -m unittest discover -s tests -v
-```
 
 Expected result:
 
-```text
-Ran 6 tests
+Ran 8 tests
 OK
-```
 
 ## Design Summary
 
-The tool uses a local rule engine. Each rule contains:
-
-- Rule ID
-- Title
-- Severity
-- Category
-- Regex patterns
-- Plain-language explanation
-- Suggested improvement
+The tool uses a local rule engine. Each rule contains a rule ID, title, severity, category, regex patterns, plain-language explanation, and suggested improvement.
 
 The tool scans the input text for rule matches, records one finding per matched rule, calculates a severity-weighted score, assigns an overall risk level, calculates basic readability metrics, and writes reports.
 
@@ -126,6 +100,8 @@ The tool scans the input text for rule matches, records one finding per matched 
 
 This is a rule-based reviewer. It can miss issues that use unusual wording. It can also flag language without understanding full legal context. Results should be reviewed by a human.
 
+Custom rule files improve extensibility, but they are still rule-based. A future version could support an optional local model or other offline language analysis, but cloud-based analysis is intentionally outside this version's scope.
+
 ## Version
 
-Current version: 1.0.0
+Current version: 1.1.0

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 
 SEVERITY_POINTS = {
@@ -145,6 +145,36 @@ RULES: list[Rule] = [
         "The notice appears to reference children, minors, or teen users.",
         "Clarify age restrictions, parental consent, collection limits, and deletion procedures for minors.",
     ),
+    Rule(
+        "PN-011",
+        "Broad service improvement or personalization purpose",
+        "medium",
+        "Purpose Limitation",
+        [
+            r"\bimprove\s+our\s+services\b",
+            r"\benhance\s+our\s+services\b",
+            r"\bpersonalize\s+your\s+experience\b",
+            r"\bresearch\s+and\s+development\b",
+        ],
+        "The notice appears to use broad purpose language that may not clearly limit how personal information is used.",
+        "Clarify the specific purposes, data types involved, and whether users can limit this processing.",
+    ),
+    Rule(
+        "PN-012",
+        "Broad legal or discretionary language",
+        "medium",
+        "Ambiguous Legal Language",
+        [
+            r"\bincluding\s+but\s+not\s+limited\s+to\b",
+            r"\bas\s+permitted\s+by\s+law\b",
+            r"\bat\s+our\s+discretion\b",
+            r"\bfrom\s+time\s+to\s+time\b",
+            r"\bmay\s+disclose\s+.*necessary\b",
+        ],
+        "The notice appears to use open-ended legal language that may be difficult for users to interpret.",
+        "Replace broad discretionary wording with specific examples, limits, and user-facing choices where possible.",
+    ),
+
 ]
 
 
@@ -241,10 +271,83 @@ def classify_risk(score: int) -> str:
     return "LOW"
 
 
-def analyze_notice(text: str, source_name: str) -> dict:
-    findings: list[Finding] = []
 
-    for rule in RULES:
+def load_custom_rules(path: Path) -> list[Rule]:
+    """Load optional custom privacy rules from a JSON file."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: invalid JSON: {exc}") from exc
+    except OSError as exc:
+        raise ValueError(f"{path}: could not read file: {exc}") from exc
+
+    entries = raw.get("rules") if isinstance(raw, dict) else raw
+    if not isinstance(entries, list):
+        raise ValueError(f"{path}: expected a JSON list or an object with a 'rules' list")
+
+    required = {
+        "rule_id",
+        "title",
+        "severity",
+        "category",
+        "patterns",
+        "explanation",
+        "recommendation",
+    }
+
+    custom_rules: list[Rule] = []
+
+    for index, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise ValueError(f"{path}: rule {index} must be a JSON object")
+
+        missing = sorted(required - set(entry))
+        if missing:
+            raise ValueError(f"{path}: rule {index} missing required fields: {', '.join(missing)}")
+
+        severity = str(entry["severity"]).strip().lower()
+        if severity not in SEVERITY_POINTS:
+            raise ValueError(f"{path}: rule {index} has unsupported severity '{entry['severity']}'")
+
+        patterns_raw = entry["patterns"]
+        if not isinstance(patterns_raw, list):
+            raise ValueError(f"{path}: rule {index} patterns must be a list")
+
+        patterns = [str(pattern).strip() for pattern in patterns_raw if str(pattern).strip()]
+        if not patterns:
+            raise ValueError(f"{path}: rule {index} must include at least one pattern")
+
+        for pattern in patterns:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"{path}: rule {index} has invalid regex pattern '{pattern}': {exc}") from exc
+
+        custom_rules.append(
+            Rule(
+                rule_id=str(entry["rule_id"]).strip(),
+                title=str(entry["title"]).strip(),
+                severity=severity,
+                category=str(entry["category"]).strip(),
+                patterns=patterns,
+                explanation=str(entry["explanation"]).strip(),
+                recommendation=str(entry["recommendation"]).strip(),
+            )
+        )
+
+    return custom_rules
+
+
+def analyze_notice(
+    text: str,
+    source_name: str,
+    rules: list[Rule] | None = None,
+    custom_rules_loaded: int = 0,
+) -> dict:
+    findings: list[Finding] = []
+    active_rules = list(rules) if rules is not None else RULES
+
+    for rule in active_rules:
         finding = find_rule_match(text, rule)
         if finding:
             findings.append(finding)
@@ -261,6 +364,8 @@ def analyze_notice(text: str, source_name: str) -> dict:
         "analysis_mode": "local-rule-based-static-review",
         "generated_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "source": source_name,
+        "rules_used": len(active_rules),
+        "custom_rules_loaded": custom_rules_loaded,
         "risk_score": risk_score,
         "risk_level": classify_risk(risk_score),
         "finding_count": len(findings),
@@ -433,6 +538,8 @@ def print_console_summary(result: dict, written_paths: Iterable[Path]) -> None:
     print(f"Risk level: {result['risk_level']}")
     print(f"Risk score: {result['risk_score']}")
     print(f"Findings: {result['finding_count']}")
+    if result.get("custom_rules_loaded"):
+        print(f"Custom rules loaded: {result['custom_rules_loaded']}")
 
     readability = result["readability"]
     print(
@@ -477,6 +584,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Report format to write. Default: all.",
     )
     parser.add_argument(
+        "--rules",
+        action="append",
+        default=[],
+        help="Optional JSON file with custom privacy rules. May be used more than once.",
+    )
+    parser.add_argument(
         "--version",
         action="store_true",
         help="Show version and exit.",
@@ -511,7 +624,20 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: input file is empty", file=sys.stderr)
         return 2
 
-    result = analyze_notice(text, str(notice_path))
+    custom_rules: list[Rule] = []
+    for rule_file in args.rules:
+        rule_path = Path(rule_file)
+        if not rule_path.exists():
+            print(f"ERROR: custom rule file not found: {rule_path}", file=sys.stderr)
+            return 2
+        try:
+            custom_rules.extend(load_custom_rules(rule_path))
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+
+    active_rules = [*RULES, *custom_rules]
+    result = analyze_notice(text, str(notice_path), active_rules, len(custom_rules))
     written_paths = write_reports(result, Path(args.output), args.report_format)
     print_console_summary(result, written_paths)
 

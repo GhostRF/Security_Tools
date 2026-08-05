@@ -1,0 +1,16 @@
+{
+  "rules": [
+    {
+      "rule_id": "CUSTOM-001",
+      "title": "Automated eligibility decisions",
+      "severity": "high",
+      "category": "Automated Decision-Making",
+      "patterns": [
+        "\\bautomated eligibility\\b",
+        "\\bautomated decision"
+      ],
+      "explanation": "The notice appears to describe automated decisions that may affect access, eligibility, or account treatment.",
+      "recommendation": "Explain what decision is automated, what data is used, whether a human review is available, and how users can appeal."
+    }
+  ]
+}
